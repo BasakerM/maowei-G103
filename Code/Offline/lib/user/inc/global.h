@@ -145,6 +145,9 @@ typedef struct
 	enum Enum_Bool serventSetDevieDataFlag;	//从机请求设置设备数据
 
 	unsigned int workTimeCount;
+
+	unsigned char checkNoWaterFolw;	//检测缺水的流程标志
+	unsigned long checkNoWaterCount;	//检测缺水计时
 }Struct_WorkData;
 
 typedef struct

@@ -1,4 +1,4 @@
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 1   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 1   
 
 
 C51 COMPILER V9.60.0.0, COMPILATION OF MODULE FUNC
@@ -62,7 +62,7 @@ line level    source
   51   1        flow == 3? flow = 0:++flow;
   52   1      
   53   1        if(++count == 10) //10ms进入一次
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 2   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 2   
 
   54   1        {
   55   2          count = 0;
@@ -126,7 +126,7 @@ line level    source
  111   1        if(global.work.getTemperatureSate == free)  //如果没在获取传感器数据
  112   1        {
  113   2          if(++global.work.getTemperatureTimeCount >= 1000) //1s
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 3   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 3   
 
  114   2          {
  115   3            global.work.getTemperatureTimeCount = 0;
@@ -190,7 +190,7 @@ line level    source
  171   4              global.work.switchTimeCount = 0;  //并把正常状态下的计时清零
  172   4              global.set.setDataSate = end; //设置参数状态切换为结束，将在 workFunc 中发送设置参
              -数设置请求
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 4   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 4   
 
  173   4            }
  174   3            else  //未到达结束状态则让状态切换至后一个
@@ -254,7 +254,7 @@ line level    source
  230   2          global.uart.sendBuff[3] = 0x05; //消息类型-低8位
  231   2          global.uart.sendBuff[4] = global.set.setSateData; //要设置的设备状态数据
  232   2          global.uart.sendBuff[5] = figureSum(global.uart.sendBuff,global.uart.sendBuff[1]-1);  //校验 0x9e
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 5   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 5   
 
  233   2      
  234   2          oneWire_write(global.uart.sendBuff,global.uart.sendBuff[1]);  //发送请求
@@ -318,7 +318,7 @@ line level    source
  292   2          {
  293   3            global.uart.sendBuff[4] = global.set.hour;  //rtc-小时
  294   3            global.uart.sendBuff[5] = global.set.minute;  //rtc-分钟
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 6   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 6   
 
  295   3          }
  296   2          global.uart.sendBuff[6] = global.set.startLightHour;  //开始照明的时间-小时
@@ -382,7 +382,7 @@ line level    source
  351   2          //      global.set.setDataSate = start;
  352   2          //    }
  353   2          //    else
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 7   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 7   
 
  354   2          //    {
  355   2          //      global.set.setDataSate = end;
@@ -446,7 +446,7 @@ line level    source
  407   5                else if(global.device.nextStartLightCountDown >= 10)  //大于等于10分钟
  408   5                  setDisplayNumber(10,global.device.nextStartLightCountDown/10,global.device.nextStartLightCountDown%1
              -0);  //以0.开头
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 8   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 8   
 
  409   5                else if(global.device.nextStartLightCountDown >= 1) //大于等于1分钟
  410   5                  setDisplayNumber(10,0,global.device.nextStartLightCountDown%10);  //以0.开头
@@ -510,7 +510,7 @@ line level    source
  460   3            global.display.water = blink;
  461   3            if(global.device.nextStartWaterCountDown != 0)
  462   3            {
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 9   
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 9   
 
  463   4              //开始的小于于结束的，说明先到达开始，那就显示距离开始的倒计时
  464   4              if(global.device.nextStartWaterCountDown < global.device.endWaterCountDown || global.device.endWaterCo
@@ -574,7 +574,7 @@ line level    source
  511   4                setDisplayNumber(global.device.endWaterCountDown/60/100,global.device.endWaterCountDown/60/10%10,glob
              -al.device.endWaterCountDown/60%10);
  512   4              else if(global.device.endWaterCountDown/60 >= 10) //大于等于10小时
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 10  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 10  
 
  513   4                setDisplayNumber(0,global.device.endWaterCountDown/60/10,global.device.endWaterCountDown/60%10);
  514   4              else if(global.device.endWaterCountDown/60 >= 1)  //大于等于1小时
@@ -638,7 +638,7 @@ line level    source
  571   3            {
  572   4              global.display.appointment = light;
  573   4              global.display.light = dark;
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 11  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 11  
 
  574   4              global.display.water = blink;
  575   4              setDisplayNumber(12,global.set.startWaterMinute/10,global.set.startWaterMinute%10);
@@ -702,7 +702,7 @@ line level    source
  633   2        }
  634   1      
  635   1        if(ioData.key.vlaue == shortlongKey1 || ioData.key.vlaue == shortlongKey2)  //当键值是连续按时
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 12  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 12  
 
  636   1        {
  637   2          if(global.work.runState >= rs_sLH && shortLongPressFlag == false) //当处于设置模式时，并且是
@@ -766,7 +766,7 @@ line level    source
  692   5                {
  693   6                  global.set.startWaterHour == 0 ? (global.set.startWaterHour = 23):(--global.set.startWaterHour);
  694   6                }break;
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 13  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 13  
 
  695   5                case rs_sWM:  //减 开始浇水时间-分钟
  696   5                {
@@ -830,7 +830,7 @@ line level    source
  752   6                  global.set.startLightMinute == 59 ? (global.set.startLightMinute = 0):(++global.set.startLightMinute
              -);
  753   6                }break;
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 14  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 14  
 
  754   5                case rs_kLH:  //加 持续照明时间-小时
  755   5                {
@@ -894,7 +894,7 @@ line level    source
  811   4              case rs_sLM:  //减 开始照明时间-分钟
  812   4              {
  813   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 15  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 15  
 
  814   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
  815   5                {
@@ -958,7 +958,7 @@ line level    source
  871   6                  global.set.keepWaterMinute == 0 ? (global.set.keepWaterMinute = 59):(--global.set.keepWaterMinute);
  872   6                }
  873   5              }break;
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 16  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 16  
 
  874   4              case rs_wCD:  //减 浇水周期-天
  875   4              {
@@ -1022,7 +1022,7 @@ line level    source
  931   4              {
  932   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
  933   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 17  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 17  
 
  934   5                {
  935   6                  ioData.key.timeCount = 0; //清空计数，重新计时
@@ -1086,7 +1086,7 @@ line level    source
  992   5              }break;
  993   4              case rs_rtcH: //加 rtc时间-小时
  994   4              {
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 18  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 18  
 
  995   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
  996   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
@@ -1150,7 +1150,7 @@ line level    source
 1049          void setDisplayNumber(unsigned char num1,unsigned char num2,unsigned char num3)
 1050          {
 1051   1        global.display.number1 = num1;
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 19  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 19  
 
 1052   1        global.display.number2 = num2;
 1053   1        global.display.number3 = num3;
@@ -1214,7 +1214,7 @@ line level    source
 1111   2        }
 1112   1        switch(global.display.nowater)
 1113   1        {
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 20  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 20  
 
 1114   2          case light: setLed(4); break;
 1115   2          case dark: resetLed(4); break;
@@ -1278,7 +1278,7 @@ line level    source
 1172   5                else global.set.startLightHour = buff[6]; //预约开始照明的时间-小时
 1173   5                if(buff[7] > 59) global.set.startLightMinute = 59;
 1174   5                else global.set.startLightMinute = buff[7]; //预约开始照明的时间-分钟
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 21  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 21  
 
 1175   5                if(buff[8] > 23) global.set.keepLightHour = 23;
 1176   5                else global.set.keepLightHour = buff[8];  //预约持续照明的时间-小时
@@ -1342,7 +1342,7 @@ line level    source
 1233   1      }
 1234          
 1235          void oneWire_stop(void)
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 22  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 22  
 
 1236          {
 1237   1        ONE_WIRE_WRITE(1);  //拉高以释放写总线作为停止信号
@@ -1406,7 +1406,7 @@ line level    source
 1293   4              dat <<= 1;
 1294   4              if(count > 3) //大于300us就算高电平
 1295   4                dat |= 1;
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 23  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 23  
 
 1296   4              count = 0;  //清高电平计数
 1297   4              timeOut = 0;  //清超时计数
@@ -1470,7 +1470,7 @@ line level    source
 1353          // unsigned char figureSum(unsigned char* buff,unsigned char len)
 1354          // {
 1355          //  unsigned char sum = 0;
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 24  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 24  
 
 1356          
 1357          //  sum += *buff++;
@@ -1534,7 +1534,7 @@ line level    source
 1411          // }
 1412          
 1413          // void uart0_isr(unsigned char dat)
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 25  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 25  
 
 1414          // {
 1415          //  unsigned char i,sum = 0;
@@ -1598,7 +1598,7 @@ line level    source
 1469          //    SBUF = *buff++;
 1470          //      while(TI==0);
 1471          //    delay(20);
-C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 26  
+C51 COMPILER V9.60.0.0   FUNC                                                              12/23/2019 14:27:42 PAGE 26  
 
 1472          //  }
 1473          // }

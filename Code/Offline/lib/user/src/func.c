@@ -148,6 +148,54 @@ void run(void)
 
 		global.time.getTimeFlag = true;	//获取一次rtc时间
 	}
+
+//判断是否缺水
+	if(isNoWater())
+	{
+		///////新的缺水报警逻辑
+		switch(global.work.checkNoWaterFolw)
+		{
+			case 0:
+			{
+				if(global.device.water == false) { global.work.checkNoWaterFolw = 1; }	//在未浇水的时候
+				else { global.work.checkNoWaterFolw = 2; }	//在未浇水的时候,并且关闭水泵(仅关闭设备的运行,不关闭设备的状态)
+			} break;
+			case 1:
+			{
+				if(++global.work.checkNoWaterCount > 100)	//连续缺水100ms
+				{
+					global.work.checkNoWaterCount = 0;
+					global.work.checkNoWaterFolw = 0;
+					global.device.noWater = true;
+					global.device.water = false;
+					WATER_CLOSE;
+				}
+			} break;
+			case 2:
+			{
+				if(++global.work.checkNoWaterCount > 5*60000)	//连续缺水5min
+				{
+					global.work.checkNoWaterCount = 0;
+					global.work.checkNoWaterFolw = 0;
+					global.device.noWater = true;
+					global.device.water = false;
+				}
+				WATER_CLOSE;
+			} break;
+		}
+	}
+	else
+	{
+		if(global.work.checkNoWaterFolw == 2 && global.device.water == true)	//在等待的时候缺水取消,且设备状态依旧,则恢复设备运行
+		{
+			WATER_OPEN;
+		}
+		global.work.checkNoWaterFolw = 0;
+		global.work.checkNoWaterCount = 0;
+
+		global.device.noWater = false;
+	}
+	
 #endif
 }
 
@@ -273,19 +321,7 @@ void runMain(void)
 #ifdef OFFLINE
 	parseDataFromTop();
 
-	//判断是否缺水
-	if(isNoWater())
-	{
-		global.device.noWater = true;
-		global.device.water = false;
-		WATER_CLOSE;
-		// global.set.noWater = true;
-	}
-	else
-	{
-		global.device.noWater = false;
-		// global.set.noWater = false;
-	}
+	
 
 	//获取RTC时间
 	if(global.time.getTimeFlag == true)
@@ -305,7 +341,7 @@ void runMain(void)
 
 	if(global.device.light == true) { LIGHT_OPEN; }
 	else if(global.device.light == false) { LIGHT_CLOSE; }
-	if(global.device.water == true && global.device.noWater == false) { WATER_OPEN; }
+	if(global.device.water == true && global.device.noWater == false && global.work.checkNoWaterFolw == 0) { WATER_OPEN; }
 	else if(global.device.water == false || global.device.noWater == true) { WATER_CLOSE; }
 
 ////////////////////////////////////////////////////////和 顶板 的通信/////////////////////////////////////////////////////////////////

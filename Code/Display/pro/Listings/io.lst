@@ -1,4 +1,4 @@
-C51 COMPILER V9.60.0.0   IO                                                                12/20/2019 13:45:52 PAGE 1   
+C51 COMPILER V9.60.0.0   IO                                                                12/23/2019 14:27:43 PAGE 1   
 
 
 C51 COMPILER V9.60.0.0, COMPILATION OF MODULE IO
@@ -62,7 +62,7 @@ line level    source
   51   1      }
   52          
   53          void setLed(unsigned char ch)
-C51 COMPILER V9.60.0.0   IO                                                                12/20/2019 13:45:52 PAGE 2   
+C51 COMPILER V9.60.0.0   IO                                                                12/23/2019 14:27:43 PAGE 2   
 
   54          {
   55   1        switch(ch)
@@ -126,7 +126,7 @@ line level    source
  112   3            ioData.key.pressTime_100ms = keyTimeCount*timeBase/100;
  113   3            if(ioData.key.pressTime_100ms >= 10)  //1s
  114   3            {
-C51 COMPILER V9.60.0.0   IO                                                                12/20/2019 13:45:52 PAGE 3   
+C51 COMPILER V9.60.0.0   IO                                                                12/23/2019 14:27:43 PAGE 3   
 
  115   4              pressFlag = 2;
  116   4              keyTimeCount = 0;
@@ -190,7 +190,7 @@ line level    source
  173   4              ioData.key.modeLock = noneKey;
  174   4            }
  175   3          }break;
-C51 COMPILER V9.60.0.0   IO                                                                12/20/2019 13:45:52 PAGE 4   
+C51 COMPILER V9.60.0.0   IO                                                                12/23/2019 14:27:43 PAGE 4   
 
  176   2          case 3:
  177   2          {
@@ -254,7 +254,7 @@ line level    source
  233   3            BEEP_OFF;
  234   3            count = 0;
  235   3          }
-C51 COMPILER V9.60.0.0   IO                                                                12/20/2019 13:45:52 PAGE 5   
+C51 COMPILER V9.60.0.0   IO                                                                12/23/2019 14:27:43 PAGE 5   
 
  236   2        }
  237   1      }
@@ -318,7 +318,7 @@ line level    source
  295            3588,
  296            3440,
  297            3311,
-C51 COMPILER V9.60.0.0   IO                                                                12/20/2019 13:45:52 PAGE 6   
+C51 COMPILER V9.60.0.0   IO                                                                12/23/2019 14:27:43 PAGE 6   
 
  298            3188,
  299            3096,
@@ -382,7 +382,7 @@ line level    source
  357   1        uint32_t Rtdt;
  358   1        uint32_t temp;
  359   1        uint8_t i;
-C51 COMPILER V9.60.0.0   IO                                                                12/20/2019 13:45:52 PAGE 7   
+C51 COMPILER V9.60.0.0   IO                                                                12/23/2019 14:27:43 PAGE 7   
 
  360   1        
  361   1        temp = (uint32_t)ain;
@@ -446,7 +446,7 @@ MODULE INFORMATION:   STATIC OVERLAYABLE
    PDATA SIZE       =   ----    ----
    DATA SIZE        =   ----    ----
    IDATA SIZE       =   ----    ----
-C51 COMPILER V9.60.0.0   IO                                                                12/20/2019 13:45:52 PAGE 8   
+C51 COMPILER V9.60.0.0   IO                                                                12/23/2019 14:27:43 PAGE 8   
 
    BIT SIZE         =   ----    ----
 END OF MODULE INFORMATION.

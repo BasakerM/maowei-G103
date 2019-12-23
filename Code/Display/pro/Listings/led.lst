@@ -1,0 +1,84 @@
+C51 COMPILER V9.60.0.0   LED                                                               08/12/2019 14:05:34 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE LED
+OBJECT MODULE PLACED IN .\Objects\led.obj
+COMPILER INVOKED BY: C:\Users\W\AppData\Local\Keil\Keil_v4\C51\BIN\C51.EXE ..\lib\user\src\led.c OPTIMIZE(8,SPEED) BROWS
+                    -E INCDIR(..\lib\n76e003\Include;..\lib\user\inc) DEFINE(FOSC_160000) DEBUG OBJECTEXTEND PRINT(.\Listings\led.lst) TABS(2
+                    -) OBJECT(.\Objects\led.obj)
+
+line level    source
+
+   1          #include  "led.h"
+   2          
+   3          void ledEnable(unsigned char ch)
+   4          {
+   5   1        LED_DISEN0; LED_DISEN1; LED_DISEN2; LED_DISEN3;
+   6   1        
+   7   1        switch(ch)
+   8   1        {
+   9   2          case 0: LED_EN0; break;
+  10   2          case 1: LED_EN1; break;
+  11   2          case 2: LED_EN2; break;
+  12   2          case 3: LED_EN3; break;
+  13   2          case 4: LED_ALL_EN; break;
+  14   2        }
+  15   1      }
+  16          
+  17          void dispalyNumber(unsigned char num)
+  18          {
+  19   1        switch(num)
+  20   1        {
+  21   2          case 0: LED_SHOW_NUM0; break;
+  22   2          case 1: LED_SHOW_NUM1; break;
+  23   2          case 2: LED_SHOW_NUM2; break;
+  24   2          case 3: LED_SHOW_NUM3; break;
+  25   2          case 4: LED_SHOW_NUM4; break;
+  26   2          case 5: LED_SHOW_NUM5; break;
+  27   2          case 6: LED_SHOW_NUM6; break;
+  28   2          case 7: LED_SHOW_NUM7; break;
+  29   2          case 8: LED_SHOW_NUM8; break;
+  30   2          case 9: LED_SHOW_NUM9; break;
+  31   2          default: LED_ALL_ON; break;
+  32   2        }
+  33   1      }
+  34          
+  35          void setLed(unsigned char ch)
+  36          {
+  37   1        switch(ch)
+  38   1        {
+  39   2          case 0: LED_A_ON; break;
+  40   2          case 1: LED_B_ON; break;
+  41   2          case 2: LED_C_ON; break;
+  42   2          case 3: LED_D_ON; break;
+  43   2          case 4: LED_E_ON; break;
+  44   2        }
+  45   1      }
+  46          
+  47          void resetLed(unsigned char ch)
+  48          {
+  49   1        switch(ch)
+  50   1        {
+  51   2          case 0: LED_A_OFF; break;
+  52   2          case 1: LED_B_OFF; break;
+  53   2          case 2: LED_C_OFF; break;
+C51 COMPILER V9.60.0.0   LED                                                               08/12/2019 14:05:34 PAGE 2   
+
+  54   2          case 3: LED_D_OFF; break;
+  55   2          case 4: LED_E_OFF; break;
+  56   2        }
+  57   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    874    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

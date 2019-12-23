@@ -1,0 +1,138 @@
+C51 COMPILER V9.60.0.0   MAIN                                                              12/20/2019 13:45:34 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Users\M\AppData\Local\Keil\Keil_v4\C51\BIN\C51.EXE ..\lib\user\main.c LARGE OPTIMIZE(8,SPEED) BR
+                    -OWSE INCDIR(..\lib\n76e003\Include;..\lib\user\inc) DEFINE(FOSC_160000) DEBUG OBJECTEXTEND PRINT(.\Listings\main.lst) TA
+                    -BS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include "global.h"
+   2          #include "func.h"
+   3          
+   4          void feedDogInIsr(unsigned int ms);
+   5          
+   6          void initTimer3(void)
+   7          {
+   8   1        T3CON = 0x07; //128分频
+   9   1        
+  10   1        RH3 = (65536-125)/256;  //1ms
+  11   1        RL3 = (65536-125)%256;   
+  12   1       
+  13   1        set_ET3;  //enable Timer3 interrupt
+  14   1        set_EA; //enable interrupts
+  15   1        set_TR3;  //Timer3 run
+  16   1      }
+  17          
+  18          void Timer3_ISR (void) interrupt 16
+  19          {
+  20   1        clr_TF3;
+  21   1        run();
+  22   1      
+  23   1        feedDogInIsr(2000); //喂狗
+  24   1      }
+  25          
+  26          void usartInit(void)
+  27          {
+  28   1        set_EA; //使能总中断
+  29   1        set_ES; //使能串口0中断
+  30   1      
+  31   1        P06_Quasi_Mode;   //Setting UART pin as Quasi mode for transmit
+  32   1        P07_Quasi_Mode;   //Setting UART pin as Quasi mode for transmit
+  33   1        
+  34   1        SCON = 0x50;      //UART0 Mode1,REN=1,TI=1
+  35   1        TMOD |= 0x20;     //Timer1 Mode1
+  36   1        
+  37   1        set_SMOD;         //UART0 Double Rate Enable
+  38   1        set_T1M;
+  39   1        clr_BRCK;         //Serial port 0 baud rate clock source = Timer1
+  40   1      
+  41   1        TH1 = 0xe6; //38400
+  42   1        set_TR1;
+  43   1      }
+  44          
+  45          void Uart0_ISR() interrupt 4
+  46          {
+  47   1          if(TI)
+  48   1        {
+  49   2          TI = 0;
+  50   2          global.uart.sendIsrFlag = true; //发送数据前会被赋值为 false
+  51   2        }
+  52   1      
+  53   1          if(RI)//串口0接收中断标志（有数据时，硬件置1）
+C51 COMPILER V9.60.0.0   MAIN                                                              12/20/2019 13:45:34 PAGE 2   
+
+  54   1          {
+  55   2          RI = 0;//软件置0
+  56   2          //SBUF = SBUF;
+  57   2          uart0_isr(SBUF);
+  58   2          }
+  59   1      }
+  60          
+  61          void wtd_init(void)
+  62          {
+  63   1          TA=0xAA;
+  64   1          TA=0x55;
+  65   1      
+  66   1          WDCON = 0x7; //根据手册 [2:0]位表示中断在多少秒后执行，0x7表示1.638s后中断执行
+             -。根据需要修改低3位
+  67   1          set_WDTR;
+  68   1          set_WDCLR;
+  69   1          set_EWDT; 
+  70   1        set_EA;//总中断记得开启，set_EA;   
+  71   1      }
+  72          
+  73          #define feedDog() set_WDCLR;  //喂狗
+  74          static unsigned int feedDogTimeCount = 0; //喂狗标志
+  75          
+  76          void feedDogInMain(void)
+  77          {
+  78   1        feedDogTimeCount = 0;
+  79   1      }
+  80          
+  81          void feedDogInIsr(unsigned int ms)
+  82          {
+  83   1        //再主循环中清除喂狗标志，在中断中喂狗，如果主循环中两秒没有清除标志则�
+             -��为主循环死了，那就停止喂狗
+  84   1        //如果中断死了,也会停止喂狗
+  85   1        if(++feedDogTimeCount < ms)
+  86   1        {
+  87   2          feedDogTimeCount = 0;
+  88   2          feedDog();
+  89   2        }
+  90   1      }
+  91          
+  92          void main(void)
+  93          {
+  94   1        #ifdef ONLINE
+                  usartInit();
+                #endif
+  97   1        init();
+  98   1        initTimer3();
+  99   1        wtd_init();
+ 100   1        feedDogInMain();  //喂狗
+ 101   1      
+ 102   1        while(1)
+ 103   1        {
+ 104   2          feedDogInMain();  //喂狗
+ 105   2          runMain();
+ 106   2        }
+ 107   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    328    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      2    ----
+C51 COMPILER V9.60.0.0   MAIN                                                              12/20/2019 13:45:34 PAGE 3   
+
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

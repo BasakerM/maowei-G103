@@ -1,0 +1,1618 @@
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE FUNC
+OBJECT MODULE PLACED IN .\Objects\func.obj
+COMPILER INVOKED BY: C:\Users\M\AppData\Local\Keil\Keil_v4\C51\BIN\C51.EXE ..\lib\user\src\func.c LARGE OPTIMIZE(8,SPEED
+                    -) BROWSE INCDIR(..\lib\n76e003\Include;..\lib\user\inc) DEFINE(FOSC_160000) DEBUG OBJECTEXTEND PRINT(.\Listings\func.lst
+                    -) TABS(2) OBJECT(.\Objects\func.obj)
+
+line level    source
+
+   1          #include "func.h"
+   2          #include "io.h"
+   3          
+   4          void timeCount(void);
+   5          void workFunc(void);
+   6          void displayInDifferentStates(void);
+   7          void keyFunc(unsigned char timeBase);
+   8          void setDisplayNumber(unsigned char num1,unsigned char num2,unsigned char num3);
+   9          void displayLed(void);
+  10          
+  11          void parseDataFromBottom(void);
+  12          void OneWire_init(void);
+  13          void oneWire_write(unsigned char* buff,unsigned char len);
+  14          unsigned char oneWire_read(unsigned char* buff);
+  15          
+  16          unsigned char figureSum(unsigned char* buff,unsigned char len);
+  17          // void uart0_sendData(unsigned char* buff,unsigned char len);
+  18          
+  19          void init(void)
+  20          {
+  21   1        initAdc();
+  22   1        OneWire_init();
+  23   1      
+  24   1        //led和数码管全亮
+  25   1        ledEnable(4);
+  26   1        dispalyNumber(98);
+  27   1        //500ms
+  28   1        Timer3_Delay100ms(15);
+  29   1      
+  30   1        global.device.nextStartLightCountDown = 1000;
+  31   1        global.device.endLightCountDown = 1000;
+  32   1        global.device.nextStartWaterCountDown = 1000;
+  33   1        global.device.endWaterCountDown = 1000;
+  34   1      }
+  35          
+  36          //
+  37          //运行在 main.c 的 Timer3_ISR 中，中断时间设置的是 1ms
+  38          //
+  39          void run(void)
+  40          {
+  41   1        static unsigned char flow = 0;
+  42   1        static unsigned int count = 0;
+  43   1        //显示刷新时间片
+  44   1        switch(flow)
+  45   1        {
+  46   2          case 0: { LED_ALL_OFF; LED_EN0; dispalyNumber(global.display.number1); } break;
+  47   2          case 1: { LED_ALL_OFF; LED_EN1; dispalyNumber(global.display.number2); } break;
+  48   2          case 2: { LED_ALL_OFF; LED_EN2; dispalyNumber(global.display.number3); } break;
+  49   2          case 3: LED_ALL_OFF; displayLed(); break;
+  50   2        }
+  51   1        flow == 3? flow = 0:++flow;
+  52   1      
+  53   1        if(++count == 10) //10ms进入一次
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 2   
+
+  54   1        {
+  55   2          count = 0;
+  56   2          keyFunc(10);  //按键功能
+  57   2        }
+  58   1      
+  59   1        timeCount();  //处理一些计时功能
+  60   1      }
+  61          
+  62          //
+  63          //运行在 main.c 的 main 函数的 while 中
+  64          //主要用于完成一些耗时操作
+  65          //
+  66          void runMain(void)
+  67          {
+  68   1        displayInDifferentStates(); //不同状态下的显示
+  69   1        workFunc(); //一些耗时操作
+  70   1      }
+  71          
+  72          //
+  73          //处理一些计时功能
+  74          //该函数放在 run 函数中，根据定时器的配置，每毫秒进入一次
+  75          //该函数内的变量都是类似的模式，当变量大于等于1的时候开始计数，当计数到�
+             -��定值的时候触发标志
+  76          //
+  77          void timeCount(void)
+  78          {
+  79   1        //////////////////////////////////////////定时向底板发送设备状态获取请求的计时/////////
+             -//////////////////////
+  80   1        if(++global.device.getDataTimeCOunt >= 2000)
+  81   1        {
+  82   2          global.device.getDataTimeCOunt = 0;
+  83   2          if(global.device.getDataFlag == false)
+  84   2          {
+  85   3            global.device.getDataFlag = true;
+  86   3          }
+  87   2        }
+  88   1        //////////////////////////////////////////串口模块的计时///////////////////////////////
+  89   1        //串口接收超时计时
+  90   1        if(global.uart.recTimeOutCount)
+  91   1        {
+  92   2          //大于100ms即为超时
+  93   2          if(++global.uart.recTimeOutCount >= 100)
+  94   2          {
+  95   3            global.uart.recTimeOutCount = 0;
+  96   3            global.uart.nowIndex = 0; //放弃当前接收的数据包，准备接收下一组数据包
+  97   3          }
+  98   2        }
+  99   1        //串口发送后等待响应超时计时
+ 100   1        if(global.uart.sendTimeOutCount)
+ 101   1        {
+ 102   2          //大于250ms即为超时
+ 103   2          if(++global.uart.sendTimeOutCount >= 250)
+ 104   2          {
+ 105   3            global.uart.sendTimeOutCount = 0;
+ 106   3            global.uart.sendTimeOutFlag = true; //置位超时标志
+ 107   3          }
+ 108   2        }
+ 109   1        
+ 110   1        //////////////////////////////////////////传感器模块的计时///////////////////////////////
+ 111   1        if(global.work.getTemperatureSate == free)  //如果没在获取传感器数据
+ 112   1        {
+ 113   2          if(++global.work.getTemperatureTimeCount >= 1000) //1s
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 3   
+
+ 114   2          {
+ 115   3            global.work.getTemperatureTimeCount = 0;
+ 116   3            global.work.getTemperatureSate = start; //开始获取传感器数据
+ 117   3          }
+ 118   2        }
+ 119   1        //////////////////////////////////////////蜂鸣器模块的计时///////////////////////////////
+ 120   1        //蜂鸣器只用于拉警报
+ 121   1        if(global.device.nowater == light && global.work.warnFlag == false) //设备状态为缺水,且没有拉�
+             -��警报
+ 122   1        {
+ 123   2          if(++global.work.warnCountDown >= 60000)  //警报60s
+ 124   2          {
+ 125   3            global.work.warnCountDown = 0;
+ 126   3            global.work.warnFlag = true;  //标记已经警报过了
+ 127   3          }
+ 128   2          Beep(); //800ms为一周期，每周期响100ms
+ 129   2        }
+ 130   1        else if(global.device.nowater == dark)
+ 131   1        {
+ 132   2          global.work.warnCountDown = 0;  //清警报计时
+ 133   2          global.work.warnFlag = false; //清警报标志
+ 134   2          BEEP_OFF;
+ 135   2        }
+ 136   1      
+ 137   1        //因为都是蜂鸣器所以放在这儿了，这是按键触发的蜂鸣
+ 138   1        keyBeep(&global.work.keyPressBeepFlag);
+ 139   1        //////////////////////////////////////////界面切换的计时///////////////////////////////
+ 140   1        //注意：runState 的切换除了在这儿，还有 workFunc 的设置参数处
+ 141   1        if(global.work.runState <= rs_normal2)  //正常运行时显示的三个界面
+ 142   1        {
+ 143   2          if(global.work.switchTimeCount == 1)  //开始显示温度
+ 144   2          {
+ 145   3            global.display.light = global.device.light; //按照设备状态显示指示灯
+ 146   3            global.display.water = global.device.water;
+ 147   3            global.work.runState = rs_normal;
+ 148   3          }
+ 149   2          else if(global.work.switchTimeCount == 20000) //开始显示照明倒计时
+ 150   2          {
+ 151   3            global.display.light = blink; //照明灯闪烁
+ 152   3            global.work.runState = rs_normal1;
+ 153   3          }
+ 154   2          else if(global.work.switchTimeCount == 25000) //开始显示浇水倒计时
+ 155   2          {
+ 156   3            global.display.water = blink; //浇水灯闪烁
+ 157   3            global.work.runState = rs_normal2;
+ 158   3          }
+ 159   2          //30s为一周期
+ 160   2          global.work.switchTimeCount == 30000 ? (global.work.switchTimeCount = 0):(++global.work.switchTimeCount)
+             -;
+ 161   2        }
+ 162   1        else if(global.work.runState >= rs_sLH) //设置状态下的显示切换
+ 163   1        {
+ 164   2          if(++global.set.switchTimeCount >= 5000)  //5s
+ 165   2          {
+ 166   3            global.set.switchTimeCount = 0; //该计时变量会在按键按下时，在 keyFunc 中被清零
+ 167   3            //倒计时结束时，状态在设置的最后一项，则说明设置完成
+ 168   3            if(global.work.runState == rs_wCD || global.work.runState == rs_rtcM) //预约或rtc设置完成
+ 169   3            {
+ 170   4              global.work.runState = rs_normal; //切回正常状态
+ 171   4              global.work.switchTimeCount = 0;  //并把正常状态下的计时清零
+ 172   4              global.set.setDataSate = end; //设置参数状态切换为结束，将在 workFunc 中发送设置参
+             -数设置请求
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 4   
+
+ 173   4            }
+ 174   3            else  //未到达结束状态则让状态切换至后一个
+ 175   3            {
+ 176   4              ++global.work.runState;
+ 177   4            }
+ 178   3          }
+ 179   2        }
+ 180   1      
+ 181   1        if(global.set.setDataSate == waitAck)
+ 182   1        {
+ 183   2          if(global.set.setWaitTimeOut < 5000) ++global.set.setWaitTimeOut;
+ 184   2        }
+ 185   1        else
+ 186   1        {
+ 187   2          global.set.setWaitTimeOut = 0;
+ 188   2        }
+ 189   1        
+ 190   1      }
+ 191          
+ 192          //
+ 193          //用于处理一些耗时操作
+ 194          //
+ 195          void workFunc(void)
+ 196          {
+ 197   1        parseDataFromBottom();  //接收处理来自底板的数据
+ 198   1        //////////////////////////////////////////传感器模块的操作///////////////////////////////
+ 199   1        if(global.work.getTemperatureSate == start) //获取传感器数据
+ 200   1        {
+ 201   2          global.work.temperature =  getAdc();  //实际温度值*10，例如255 = 25.5摄氏度,最大值为1000 =
+             - 100.0
+ 202   2          global.work.getTemperatureSate = free;
+ 203   2        }
+ 204   1        //////////////////////////////////////////需要发串口的操作///////////////////////////////
+ 205   1        //////////////向底板发送设备状态获取的请求///////////
+ 206   1        if(global.set.setDataSate != free || global.set.setSateSate != free)  //只有空闲的时候才可以请�
+             -��
+ 207   1          global.device.getDataFlag = false;
+ 208   1        if(global.device.getDataFlag == true)
+ 209   1        {
+ 210   2          global.uart.sendBuff[0] = 0x96; //头
+ 211   2          global.uart.sendBuff[1] = 7;  //长度
+ 212   2          global.uart.sendBuff[2] = 0x00; //消息类型-高8位
+ 213   2          global.uart.sendBuff[3] = 0x01; //消息类型-低8位
+ 214   2          global.uart.sendBuff[4] = (unsigned char)(global.work.temperature>>8);  //温度
+ 215   2          global.uart.sendBuff[5] = (unsigned char)(global.work.temperature&0xff);
+ 216   2          global.uart.sendBuff[6] = figureSum(global.uart.sendBuff,global.uart.sendBuff[1]-1);  //校验 0x9e
+ 217   2      
+ 218   2          oneWire_write(global.uart.sendBuff,global.uart.sendBuff[1]);  //发送请求
+ 219   2          global.device.getDataFlag = false;
+ 220   2        }
+ 221   1        ///////////////设备状态设置请求///////////////////////
+ 222   1        if(global.set.setSateSate == start)
+ 223   1        {
+ 224   2          global.device.getDataTimeCOunt = 0;
+ 225   2          global.device.getDataFlag = false;
+ 226   2          
+ 227   2          global.uart.sendBuff[0] = 0x96; //头
+ 228   2          global.uart.sendBuff[1] = 6;  //长度
+ 229   2          global.uart.sendBuff[2] = 0x00; //消息类型-高8位
+ 230   2          global.uart.sendBuff[3] = 0x05; //消息类型-低8位
+ 231   2          global.uart.sendBuff[4] = global.set.setSateData; //要设置的设备状态数据
+ 232   2          global.uart.sendBuff[5] = figureSum(global.uart.sendBuff,global.uart.sendBuff[1]-1);  //校验 0x9e
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 5   
+
+ 233   2      
+ 234   2          oneWire_write(global.uart.sendBuff,global.uart.sendBuff[1]);  //发送请求
+ 235   2          global.set.setSateSate = free;  //进入空闲状态
+ 236   2        }
+ 237   1        else if(global.set.setSateSate == waitAck)  //等待响应
+ 238   1        {
+ 239   2          // if(global.set.setWaitTimeOut >= 3000)
+ 240   2          // {
+ 241   2          //  global.set.setSateSate = free;  //状态切回空闲
+ 242   2          //  global.work.runState = rs_normal; //状态切换为正常
+ 243   2          // }
+ 244   2        //  if(global.uart.sendTimeOutFlag) //等待响应超时了
+ 245   2        //  { //开始设置时将无法进入设置，结束设置时将保存设置失败
+ 246   2      
+ 247   2        //    global.uart.sendTimeOutFlag = false;
+ 248   2        //    if(global.uart.resendCount >= 5)  //重发四次都失败
+ 249   2        //    {
+ 250   2        //      global.set.setSateSate = free;  //状态切回空闲
+ 251   2        //      global.uart.resendCount = 0;
+ 252   2        //    }
+ 253   2        //    else
+ 254   2        //    {
+ 255   2        //      ++global.uart.resendCount;  //重发次数加一
+ 256   2        //      global.set.setSateSate = start;
+ 257   2        //    }
+ 258   2            
+ 259   2        //  }
+ 260   2        // }
+ 261   2        // else if(global.set.setSateSate == end) //得到响应，结束
+ 262   2        // {
+ 263   2        //  global.set.setSateSate = free;
+ 264   2        //  global.uart.resendCount = 0;
+ 265   2        }
+ 266   1        
+ 267   1        ////////////////////////设置参数//////////////////////////
+ 268   1        if(global.set.setDataSate == start) //开始设置时，发送设置参数获取请求
+ 269   1        {
+ 270   2          global.uart.sendBuff[0] = 0x96; //头
+ 271   2          global.uart.sendBuff[1] = 5;  //长度
+ 272   2          global.uart.sendBuff[2] = 0x00; //消息类型-高8位
+ 273   2          global.uart.sendBuff[3] = 0x03; //消息类型-低8位
+ 274   2          global.uart.sendBuff[4] = figureSum(global.uart.sendBuff,global.uart.sendBuff[1]-1);  //校验 0x9e
+ 275   2      
+ 276   2          global.work.runState = rs_wait; //状态切换为等待
+ 277   2          global.set.setDataSate = waitAck; //进入等待响应状态
+ 278   2          oneWire_write(global.uart.sendBuff,global.uart.sendBuff[1]);  //发送请求
+ 279   2        }
+ 280   1        else if(global.set.setDataSate == end)  //结束设置时，发送设置参数设置请求
+ 281   1        {
+ 282   2          global.uart.sendBuff[0] = 0x96; //头
+ 283   2          global.uart.sendBuff[1] = 16; //长度
+ 284   2          global.uart.sendBuff[2] = 0x00; //消息类型-高8位
+ 285   2          global.uart.sendBuff[3] = 0x06; //消息类型-低8位
+ 286   2          if(global.set.setAppointmentFlag == 2)  //如果是预约设置
+ 287   2          {
+ 288   3            global.uart.sendBuff[4] = 0xff; //rtc-小时--不修改
+ 289   3            global.uart.sendBuff[5] = 0xff; //rtc-分钟--不修改
+ 290   3          }
+ 291   2          if(global.set.setRtcFlag == 2)
+ 292   2          {
+ 293   3            global.uart.sendBuff[4] = global.set.hour;  //rtc-小时
+ 294   3            global.uart.sendBuff[5] = global.set.minute;  //rtc-分钟
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 6   
+
+ 295   3          }
+ 296   2          global.uart.sendBuff[6] = global.set.startLightHour;  //开始照明的时间-小时
+ 297   2          global.uart.sendBuff[7] = global.set.startLightMinute;  //开始照明的时间-分钟
+ 298   2          global.uart.sendBuff[8] = global.set.keepLightHour; //持续照明的时间-小时
+ 299   2          global.uart.sendBuff[9] = global.set.keepLightMinute; //持续照明的时间-分钟
+ 300   2          global.uart.sendBuff[10] = global.set.startWaterHour; //开始浇水的时间-小时
+ 301   2          global.uart.sendBuff[11] = global.set.startWaterMinute; //开始浇水的时间-分钟
+ 302   2          global.uart.sendBuff[12] = global.set.keepWaterHour;  //持续浇水的时间-小时
+ 303   2          global.uart.sendBuff[13] = global.set.keepWaterMinute;  //持续浇水的时间-分钟
+ 304   2          global.uart.sendBuff[14] = global.set.waterCycleDay;  //浇水的周期-天
+ 305   2          global.uart.sendBuff[15] = figureSum(global.uart.sendBuff,global.uart.sendBuff[1]-1); //校验
+ 306   2      
+ 307   2          global.work.runState = rs_wait; //状态切换为等待
+ 308   2          global.set.setDataSate = waitAck; //进入等待响应状态
+ 309   2          oneWire_write(global.uart.sendBuff,global.uart.sendBuff[1]);  //发送请求
+ 310   2        }
+ 311   1        else if(global.set.setDataSate == ing)  //得到响应进入设置
+ 312   1        {
+ 313   2          if(global.set.setAppointmentFlag == true) //如果是预约设置
+ 314   2          {
+ 315   3            global.set.setAppointmentFlag = 2;
+*** WARNING C259 IN LINE 315 OF ..\lib\user\src\func.c: '=': different enumeration types
+ 316   3            global.work.runState = rs_sLH;  //切换状态至预约设置的第一项
+ 317   3          }
+ 318   2          if(global.set.setRtcFlag == true) //如果时rtc设置
+ 319   2          {
+ 320   3            global.set.setRtcFlag = 2;
+*** WARNING C259 IN LINE 320 OF ..\lib\user\src\func.c: '=': different enumeration types
+ 321   3            global.work.runState = rs_rtcH; //切换状态至rtc设置的第一项
+ 322   3          }
+ 323   2          global.uart.resendCount = 0;
+ 324   2          global.set.setDataSate = ing; //当设置完成后会被设为 end
+ 325   2        }
+ 326   1        else if(global.set.setDataSate == waitAck)  //等待响应
+ 327   1        {
+ 328   2          if(global.set.setWaitTimeOut >= 3000)
+ 329   2          {
+ 330   3            global.set.setDataSate = free;  //状态切回空闲
+ 331   3            global.work.runState = rs_normal; //状态切换为正常
+ 332   3          }
+ 333   2          // if(global.uart.sendTimeOutFlag)  //等待响应超时了
+ 334   2          // {  //开始设置时将无法进入设置，结束设置时将保存设置失败
+ 335   2      
+ 336   2          //  global.uart.sendTimeOutFlag = false;
+ 337   2          //  if(global.uart.resendCount >= 20) //重发四次都失败
+ 338   2          //  {
+ 339   2          //    global.set.setDataSate = free;  //状态切回空闲
+ 340   2          //    global.work.runState = rs_normal; //状态切换为正常
+ 341   2          //    global.work.switchTimeCount = 0;
+ 342   2          //    global.uart.resendCount = 0;
+ 343   2          //    global.set.setAppointmentFlag = false;
+ 344   2          //    global.set.setRtcFlag = false;
+ 345   2          //  }
+ 346   2          //  else
+ 347   2          //  {
+ 348   2          //    ++global.uart.resendCount;  //重发次数加一
+ 349   2          //    if(global.set.setAppointmentFlag == true || global.set.setRtcFlag == true)  //有一个为true说明
+             -未进入end状态，说明上一个发送请求的状态为start
+ 350   2          //    {
+ 351   2          //      global.set.setDataSate = start;
+ 352   2          //    }
+ 353   2          //    else
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 7   
+
+ 354   2          //    {
+ 355   2          //      global.set.setDataSate = end;
+ 356   2          //    }
+ 357   2          //  }
+ 358   2            
+ 359   2          // }
+ 360   2        }
+ 361   1        else if(global.set.setDataSate == ack)  //响应
+ 362   1        {
+ 363   2          global.set.setDataSate = free;
+ 364   2          global.work.runState = rs_normal; //状态切换为正常
+ 365   2          global.work.switchTimeCount = 0;
+ 366   2          global.uart.resendCount = 0;
+ 367   2          global.set.setAppointmentFlag = false;
+ 368   2          global.set.setRtcFlag = false;
+ 369   2        }
+ 370   1      }
+ 371          
+ 372          //
+ 373          //不同状态下的显示
+ 374          //
+ 375          void displayInDifferentStates(void)
+ 376          {
+ 377   1        global.display.wifi = global.device.wifi;
+ 378   1        global.display.nowater = global.device.nowater;
+ 379   1        switch(global.work.runState)
+ 380   1        {
+ 381   2          case rs_normal: //显示温度
+ 382   2          {
+ 383   3            global.display.appointment = global.device.appointment; //除了设置时，其他时候不点亮
+ 384   3            global.display.light = global.device.light; //正常情况就按照设备状态显示
+ 385   3            global.display.water = global.device.water; //正常情况就按照设备状态显示
+ 386   3            //第二个参数加10是因为10-19表示显示 0.-9. ，使个位后面有小数点
+ 387   3            setDisplayNumber(global.work.temperature/100,global.work.temperature/10%10 + 10,global.work.temperature
+             -%10);
+ 388   3          }break;
+ 389   2          case rs_normal1:  //显示照明倒计时
+ 390   2          {
+ 391   3            global.display.light = blink;
+ 392   3            global.display.water = dark;
+ 393   3            if(global.device.nextStartLightCountDown != 0)  //这里是为了不显示0的倒计时,当为0时直接
+             -显示下一个倒计时
+ 394   3            {
+ 395   4              //开始的小于于结束的，说明先到达开始，那就显示距离开始的倒计时
+ 396   4              if(global.device.nextStartLightCountDown < global.device.endLightCountDown || global.device.endLightCo
+             -untDown == 0)
+ 397   4              {
+ 398   5                //最大也就是24*60分钟
+ 399   5                if(global.device.nextStartLightCountDown/60 >= 999) //正常情况下不可能出现这个值,这里�
+             -��一个限定
+ 400   5                  setDisplayNumber(9,9,9);
+ 401   5                else if(global.device.nextStartLightCountDown/60 >= 100)  //大于等于100小时
+ 402   5                  setDisplayNumber(global.device.nextStartLightCountDown/60/100,global.device.nextStartLightCountDown/
+             -60/10%10,global.device.nextStartLightCountDown/60%10);
+ 403   5                else if(global.device.nextStartLightCountDown/60 >= 10) //大于等于10小时
+ 404   5                  setDisplayNumber(0,global.device.nextStartLightCountDown/60/10,global.device.nextStartLightCountDown
+             -/60%10);
+ 405   5                else if(global.device.nextStartLightCountDown/60 >= 1)  //大于等于1小时
+ 406   5                  setDisplayNumber(0,0,global.device.nextStartLightCountDown/60);
+ 407   5                else if(global.device.nextStartLightCountDown >= 10)  //大于等于10分钟
+ 408   5                  setDisplayNumber(10,global.device.nextStartLightCountDown/10,global.device.nextStartLightCountDown%1
+             -0);  //以0.开头
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 8   
+
+ 409   5                else if(global.device.nextStartLightCountDown >= 1) //大于等于1分钟
+ 410   5                  setDisplayNumber(10,0,global.device.nextStartLightCountDown%10);  //以0.开头
+ 411   5                else if(global.device.nextStartLightCountDown == 0) //等于0分钟
+ 412   5                  setDisplayNumber(10,0,0); //以0.开头
+ 413   5              }
+ 414   4            }
+ 415   3            if(global.device.endLightCountDown != 0)
+ 416   3            {
+ 417   4              //显示距离下一次开始的倒计时
+ 418   4              if(global.device.endLightCountDown < global.device.nextStartLightCountDown || global.device.nextStartL
+             -ightCountDown == 0)
+ 419   4              {
+ 420   5                //最大也就是24*60分钟
+ 421   5                if(global.device.endLightCountDown/60 >= 999) //正常情况下不可能出现这个值,这里为一�
+             -��限定
+ 422   5                  setDisplayNumber(9,9,9);
+ 423   5                else if(global.device.endLightCountDown/60 >= 100)  //大于等于100小时
+ 424   5                  setDisplayNumber(global.device.endLightCountDown/60/100,global.device.endLightCountDown/60/10%10,glo
+             -bal.device.endLightCountDown/60%10);
+ 425   5                else if(global.device.endLightCountDown/60 >= 10) //大于等于10小时
+ 426   5                  setDisplayNumber(0,global.device.endLightCountDown/60/10,global.device.endLightCountDown/60%10);
+ 427   5                else if(global.device.endLightCountDown/60 >= 1)  //大于等于1小时
+ 428   5                  setDisplayNumber(0,0,global.device.endLightCountDown/60);
+ 429   5                else if(global.device.endLightCountDown >= 10)  //大于等于10分钟
+ 430   5                  setDisplayNumber(10,global.device.endLightCountDown/10,global.device.endLightCountDown%10); //以0.�
+             -��头
+ 431   5                else if(global.device.endLightCountDown >= 1) //大于等于1分钟
+ 432   5                  setDisplayNumber(10,0,global.device.endLightCountDown%10);  //以0.开头
+ 433   5                else if(global.device.endLightCountDown == 0) //等于0分钟
+ 434   5                  setDisplayNumber(10,0,0); //以0.开头
+ 435   5              }
+ 436   4            }
+ 437   3            //当相等的时候，不管时0还是多少，反正显示一个值就行了,正常情况是不会出
+             -现的,这里不加的话，可能会出现当相等或都为0的时候,倒计时显示异常
+ 438   3            if(global.device.nextStartLightCountDown == global.device.endLightCountDown)
+ 439   3            {
+ 440   4              //最大也就是24*60分钟
+ 441   4              if(global.device.endLightCountDown/60 >= 999) //正常情况下不可能出现这个值,这里为一�
+             -�限定
+ 442   4                setDisplayNumber(9,9,9);
+ 443   4              else if(global.device.endLightCountDown/60 >= 100)  //大于等于100小时
+ 444   4                setDisplayNumber(global.device.endLightCountDown/60/100,global.device.endLightCountDown/60/10%10,glob
+             -al.device.endLightCountDown/60%10);
+ 445   4              else if(global.device.endLightCountDown/60 >= 10) //大于等于10小时
+ 446   4                setDisplayNumber(0,global.device.endLightCountDown/60/10,global.device.endLightCountDown/60%10);
+ 447   4              else if(global.device.endLightCountDown/60 >= 1)  //大于等于1小时
+ 448   4                setDisplayNumber(0,0,global.device.endLightCountDown/60);
+ 449   4              else if(global.device.endLightCountDown >= 10)  //大于等于10分钟
+ 450   4                setDisplayNumber(10,global.device.endLightCountDown/10,global.device.endLightCountDown%10); //以0.�
+             -�头
+ 451   4              else if(global.device.endLightCountDown >= 1) //大于等于1分钟
+ 452   4                setDisplayNumber(10,0,global.device.endLightCountDown%10);  //以0.开头
+ 453   4              else if(global.device.endLightCountDown == 0) //等于0分钟
+ 454   4                setDisplayNumber(10,0,0); //以0.开头
+ 455   4            }
+ 456   3          }break;
+ 457   2          case rs_normal2:  //显示浇水倒计时
+ 458   2          {
+ 459   3            global.display.light = dark;
+ 460   3            global.display.water = blink;
+ 461   3            if(global.device.nextStartWaterCountDown != 0)
+ 462   3            {
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 9   
+
+ 463   4              //开始的小于于结束的，说明先到达开始，那就显示距离开始的倒计时
+ 464   4              if(global.device.nextStartWaterCountDown < global.device.endWaterCountDown || global.device.endWaterCo
+             -untDown == 0)
+ 465   4              {
+ 466   5                //最大也就是30*24*60分钟，720小时
+ 467   5                if(global.device.nextStartWaterCountDown/60 >= 999) //正常情况下不可能出现这个值,这里�
+             -��一个限定
+ 468   5                  setDisplayNumber(9,9,9);
+ 469   5                else if(global.device.nextStartWaterCountDown/60 >= 100)  //大于等于100小时
+ 470   5                  setDisplayNumber(global.device.nextStartWaterCountDown/60/100,global.device.nextStartWaterCountDown/
+             -60/10%10,global.device.nextStartWaterCountDown/60%10);
+ 471   5                else if(global.device.nextStartWaterCountDown/60 >= 10) //大于等于10小时
+ 472   5                  setDisplayNumber(0,global.device.nextStartWaterCountDown/60/10,global.device.nextStartWaterCountDown
+             -/60%10);
+ 473   5                else if(global.device.nextStartWaterCountDown/60 >= 1)  //大于等于1小时
+ 474   5                  setDisplayNumber(0,0,global.device.nextStartWaterCountDown/60);
+ 475   5                else if(global.device.nextStartWaterCountDown >= 10)  //大于等于10分钟
+ 476   5                  setDisplayNumber(10,global.device.nextStartWaterCountDown/10,global.device.nextStartWaterCountDown%1
+             -0);  //以0.开头
+ 477   5                else if(global.device.nextStartWaterCountDown >= 1) //大于等于1分钟
+ 478   5                  setDisplayNumber(10,0,global.device.nextStartWaterCountDown%10);  //以0.开头
+ 479   5                else if(global.device.nextStartWaterCountDown == 0) //等于0分钟
+ 480   5                  setDisplayNumber(10,0,0); //以0.开头
+ 481   5              }
+ 482   4            }
+ 483   3            if(global.device.endWaterCountDown != 0)
+ 484   3            {
+ 485   4              if(global.device.endWaterCountDown < global.device.nextStartWaterCountDown || global.device.nextStartW
+             -aterCountDown == 0) //说明未在照明，那就显示距离下一次开始的倒计时
+ 486   4              {
+ 487   5                //最大也就是15*24*60分钟，360小时
+ 488   5                if(global.device.endWaterCountDown/60 >= 999) //正常情况下不可能出现这个值,这里为一�
+             -��限定
+ 489   5                  setDisplayNumber(9,9,9);
+ 490   5                else if(global.device.endWaterCountDown/60 >= 100)  //大于等于100小时
+ 491   5                  setDisplayNumber(global.device.endWaterCountDown/60/100,global.device.endWaterCountDown/60/10%10,glo
+             -bal.device.endWaterCountDown/60%10);
+ 492   5                else if(global.device.endWaterCountDown/60 >= 10) //大于等于10小时
+ 493   5                  setDisplayNumber(0,global.device.endWaterCountDown/60/10,global.device.endWaterCountDown/60%10);
+ 494   5                else if(global.device.endWaterCountDown/60 >= 1)  //大于等于1小时
+ 495   5                  setDisplayNumber(0,0,global.device.endWaterCountDown/60);
+ 496   5                else if(global.device.endWaterCountDown >= 10)  //大于等于10分钟
+ 497   5                  setDisplayNumber(10,global.device.endWaterCountDown/10,global.device.endWaterCountDown%10); //以0.�
+             -��头
+ 498   5                else if(global.device.endWaterCountDown >= 1) //大于等于1分钟
+ 499   5                  setDisplayNumber(10,0,global.device.endWaterCountDown%10);  //以0.开头
+ 500   5                else if(global.device.endWaterCountDown == 0) //等于0分钟
+ 501   5                  setDisplayNumber(10,0,0); //以0.开头
+ 502   5              }
+ 503   4            }
+ 504   3            //当相等的时候，不管时0还是多少，反正显示一个值就行了,正常情况是不会出
+             -现的,这里不加的话，可能会出现当相等或都为0的时候,倒计时显示异常
+ 505   3            if(global.device.endWaterCountDown == global.device.nextStartWaterCountDown)
+ 506   3            {
+ 507   4              //最大也就是15*24*60分钟，360小时
+ 508   4              if(global.device.endWaterCountDown/60 >= 999) //正常情况下不可能出现这个值,这里为一�
+             -�限定
+ 509   4                setDisplayNumber(9,9,9);
+ 510   4              else if(global.device.endWaterCountDown/60 >= 100)  //大于等于100小时
+ 511   4                setDisplayNumber(global.device.endWaterCountDown/60/100,global.device.endWaterCountDown/60/10%10,glob
+             -al.device.endWaterCountDown/60%10);
+ 512   4              else if(global.device.endWaterCountDown/60 >= 10) //大于等于10小时
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 10  
+
+ 513   4                setDisplayNumber(0,global.device.endWaterCountDown/60/10,global.device.endWaterCountDown/60%10);
+ 514   4              else if(global.device.endWaterCountDown/60 >= 1)  //大于等于1小时
+ 515   4                setDisplayNumber(0,0,global.device.endWaterCountDown/60);
+ 516   4              else if(global.device.endWaterCountDown >= 10)  //大于等于10分钟
+ 517   4                setDisplayNumber(10,global.device.endWaterCountDown/10,global.device.endWaterCountDown%10); //以0.�
+             -�头
+ 518   4              else if(global.device.endWaterCountDown >= 1) //大于等于1分钟
+ 519   4                setDisplayNumber(10,0,global.device.endWaterCountDown%10);  //以0.开头
+ 520   4              else if(global.device.endWaterCountDown == 0) //等于0分钟
+ 521   4                setDisplayNumber(10,0,0); //以0.开头
+ 522   4            }
+ 523   3          }break;
+ 524   2          case rs_wait:
+ 525   2          {
+ 526   3            setDisplayNumber(30,30,30); //---
+ 527   3          }break;
+ 528   2        }
+ 529   1        
+ 530   1        //设置模式下
+ 531   1        if(global.set.setDataSate == ing) //设置中
+ 532   1        {
+ 533   2          switch(global.work.runState)
+ 534   2          {
+ 535   3            case rs_sLH:  //预约设置--开始照明-小时
+ 536   3            {
+ 537   4              global.display.appointment = light;
+ 538   4              global.display.light = blink;
+ 539   4              global.display.water = dark;
+ 540   4              setDisplayNumber(11,global.set.startLightHour/10,global.set.startLightHour%10);
+ 541   4            }break;
+ 542   3            case rs_sLM:  //预约设置--开始照明-分钟
+ 543   3            {
+ 544   4              global.display.appointment = light;
+ 545   4              global.display.light = blink;
+ 546   4              global.display.water = dark;
+ 547   4              setDisplayNumber(12,global.set.startLightMinute/10,global.set.startLightMinute%10);
+ 548   4            }break;
+ 549   3            case rs_kLH:  //预约设置--持续照明-小时
+ 550   3            {
+ 551   4              global.display.appointment = light;
+ 552   4              global.display.light = blink;
+ 553   4              global.display.water = dark;
+ 554   4              setDisplayNumber(13,global.set.keepLightHour/10,global.set.keepLightHour%10);
+ 555   4            }break;
+ 556   3            case rs_kLM:  //预约设置--持续照明-分钟
+ 557   3            {
+ 558   4              global.display.appointment = light;
+ 559   4              global.display.light = blink;
+ 560   4              global.display.water = dark;
+ 561   4              setDisplayNumber(14,global.set.keepLightMinute/10,global.set.keepLightMinute%10);
+ 562   4            }break;
+ 563   3            case rs_sWH:  //预约设置--开始浇水-小时
+ 564   3            {
+ 565   4              global.display.appointment = light;
+ 566   4              global.display.light = dark;
+ 567   4              global.display.water = blink;
+ 568   4              setDisplayNumber(11,global.set.startWaterHour/10,global.set.startWaterHour%10);
+ 569   4            }break;
+ 570   3            case rs_sWM:  //预约设置--开始浇水-分钟
+ 571   3            {
+ 572   4              global.display.appointment = light;
+ 573   4              global.display.light = dark;
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 11  
+
+ 574   4              global.display.water = blink;
+ 575   4              setDisplayNumber(12,global.set.startWaterMinute/10,global.set.startWaterMinute%10);
+ 576   4            }break;
+ 577   3            case rs_kWH:  //预约设置--持续浇水-小时
+ 578   3            {
+ 579   4              global.display.appointment = light;
+ 580   4              global.display.light = dark;
+ 581   4              global.display.water = blink;
+ 582   4              setDisplayNumber(13,global.set.keepWaterHour/10,global.set.keepWaterHour%10);
+ 583   4            }break;
+ 584   3            case rs_kWM:  //预约设置--持续浇水-分钟
+ 585   3            {
+ 586   4              global.display.appointment = light;
+ 587   4              global.display.light = dark;
+ 588   4              global.display.water = blink;
+ 589   4              setDisplayNumber(14,global.set.keepWaterMinute/10,global.set.keepWaterMinute%10);
+ 590   4            }break;
+ 591   3            case rs_wCD:  //预约设置--浇水周期-天
+ 592   3            {
+ 593   4              global.display.appointment = light;
+ 594   4              global.display.light = dark;
+ 595   4              global.display.water = blink;
+ 596   4              setDisplayNumber(15,global.set.waterCycleDay/10,global.set.waterCycleDay%10);
+ 597   4            }break;
+ 598   3            case rs_rtcH: //rtc设置--小时
+ 599   3            {
+ 600   4              global.display.appointment = blink;
+ 601   4              global.display.light = dark;
+ 602   4              global.display.water = dark;
+ 603   4              setDisplayNumber(11,global.set.hour/10,global.set.hour%10);
+ 604   4            }break;
+ 605   3            case rs_rtcM: //rtc设置--分钟
+ 606   3            {
+ 607   4              global.display.appointment = blink;
+ 608   4              global.display.light = dark;
+ 609   4              global.display.water = dark;
+ 610   4              setDisplayNumber(12,global.set.minute/10,global.set.minute%10);
+ 611   4            }break;
+ 612   3          }
+ 613   2        }
+ 614   1        else if(global.set.setDataSate == waitAck)
+ 615   1        {
+ 616   2          setDisplayNumber(30,30,30); //三个短横
+ 617   2        }
+ 618   1      }
+ 619          
+ 620          //
+ 621          //按键功能，在 run 中每 10ms 调用一次
+ 622          //
+ 623          void keyFunc(unsigned char timeBase)
+ 624          {
+ 625   1        static unsigned char shortLongPressFlag = false;
+ 626   1        unsigned char shortlongtime100 = 1;
+ 627   1        keyScanf(timeBase); //每10ms扫描一次
+ 628   1      
+ 629   1        if(ioData.key.vlaue == noneKey) //没有键值
+ 630   1        {
+ 631   2          shortLongPressFlag = false;
+ 632   2          return;
+ 633   2        }
+ 634   1      
+ 635   1        if(ioData.key.vlaue == shortlongKey1 || ioData.key.vlaue == shortlongKey2)  //当键值是连续按时
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 12  
+
+ 636   1        {
+ 637   2          if(global.work.runState >= rs_sLH && shortLongPressFlag == false) //当处于设置模式时，并且是
+             -连续按的第一次触发
+ 638   2          {
+ 639   3            shortLongPressFlag = true;
+ 640   3            global.work.keyPressBeepFlag = true;  //有键值则置位标志，响按键音
+ 641   3          }
+ 642   2        }
+ 643   1        else  //不是连续按的时候
+ 644   1        {
+ 645   2          global.work.keyPressBeepFlag = true;  //有键值则置位标志，响按键音
+ 646   2        }
+ 647   1      
+ 648   1        switch(ioData.key.vlaue)
+ 649   1        {
+ 650   2          case noneKey:  break;
+ 651   2          /////////////////////////////////////////////短按照明键////////////////////////////////////////////
+             -///////
+ 652   2          case shortKey1:
+ 653   2          {
+ 654   3            global.set.switchTimeCount = 0; //清除设置状态下的自动切换计时
+ 655   3      
+ 656   3            if(global.work.runState <= rs_normal2)  //在正常运行的三个状态中
+ 657   3            {
+ 658   4              if(global.device.light == light)  //如果在照明
+ 659   4              {
+ 660   5                global.set.setSateData = 0x10;  //照明关
+ 661   5              }
+ 662   4              else
+ 663   4              {
+ 664   5                global.set.setSateData = 0x11;  //照明开
+ 665   5              }
+ 666   4              if(global.set.setSateSate == free)
+ 667   4              {
+ 668   5                global.set.setSateSate = start; //将在 workFunc 中发送设备状态设置请求
+ 669   5              }
+ 670   4            }
+ 671   3            else
+ 672   3            {
+ 673   4              switch (global.work.runState)
+ 674   4              {
+ 675   5                case rs_sLH:  //减 开始照明时间-小时
+ 676   5                {
+ 677   6                  global.set.startLightHour == 0 ? (global.set.startLightHour = 23):(--global.set.startLightHour);
+ 678   6                }break;
+ 679   5                case rs_sLM:  //减 开始照明时间-分钟
+ 680   5                {
+ 681   6                  global.set.startLightMinute == 0 ? (global.set.startLightMinute = 59):(--global.set.startLightMinute
+             -);
+ 682   6                }break;
+ 683   5                case rs_kLH:  //减 持续照明时间-小时
+ 684   5                {
+ 685   6                  global.set.keepLightHour == 0 ? (global.set.keepLightHour = 23):(--global.set.keepLightHour);
+ 686   6                }break;
+ 687   5                case rs_kLM:  //减 持续照明时间-分钟
+ 688   5                {
+ 689   6                  global.set.keepLightMinute == 0 ? (global.set.keepLightMinute = 59):(--global.set.keepLightMinute);
+ 690   6                }break;
+ 691   5                case rs_sWH:  //减 开始浇水时间-小时
+ 692   5                {
+ 693   6                  global.set.startWaterHour == 0 ? (global.set.startWaterHour = 23):(--global.set.startWaterHour);
+ 694   6                }break;
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 13  
+
+ 695   5                case rs_sWM:  //减 开始浇水时间-分钟
+ 696   5                {
+ 697   6                  global.set.startWaterMinute == 0 ? (global.set.startWaterMinute = 59):(--global.set.startWaterMinute
+             -);
+ 698   6                }break;
+ 699   5                case rs_kWH:  //减 持续浇水时间-小时
+ 700   5                {
+ 701   6                  global.set.keepWaterHour == 0 ? (global.set.keepWaterHour = 23):(--global.set.keepWaterHour);
+ 702   6                }break;
+ 703   5                case rs_kWM:  //减 持续浇水时间-分钟
+ 704   5                {
+ 705   6                  global.set.keepWaterMinute == 0 ? (global.set.keepWaterMinute = 59):(--global.set.keepWaterMinute);
+ 706   6                }break;
+ 707   5                case rs_wCD:  //减 浇水周期-天
+ 708   5                {
+ 709   6                  global.set.waterCycleDay == 1 ? (global.set.waterCycleDay = 30):(--global.set.waterCycleDay);
+ 710   6                }break;
+ 711   5                case rs_rtcH: //减 rtc时间-小时
+ 712   5                {
+ 713   6                  global.set.hour == 0 ? (global.set.hour = 23):(--global.set.hour);
+ 714   6                }break;
+ 715   5                case rs_rtcM: //减 rtc时间-分钟
+ 716   5                {
+ 717   6                  global.set.minute == 0 ? (global.set.minute = 59):(--global.set.minute);
+ 718   6                }break;
+ 719   5              }
+ 720   4            }
+ 721   3          }break;
+ 722   2          //////////////////////////////////////////////////////////短按浇水键///////////////////////////////
+             -///////////////////////////
+ 723   2          case shortKey2:
+ 724   2          {
+ 725   3            global.set.switchTimeCount = 0; //清除设置状态下的自动切换计时
+ 726   3      
+ 727   3            if(global.work.runState <= rs_normal2)  //在正常运行的三个状态中
+ 728   3            {
+ 729   4              if(global.device.water == light)  //如果在浇水
+ 730   4              {
+ 731   5                global.set.setSateData = 0x20;  //浇水关
+ 732   5              }
+ 733   4              else
+ 734   4              {
+ 735   5                global.set.setSateData = 0x21;  //浇水开
+ 736   5              }
+ 737   4              if(global.set.setSateSate == free)
+ 738   4              {
+ 739   5                global.set.setSateSate = start; //将在 workFunc 中发送设备状态设置请求
+ 740   5              }
+ 741   4            }
+ 742   3            else
+ 743   3            {
+ 744   4              switch (global.work.runState)
+ 745   4              {
+ 746   5                case rs_sLH:  //加 开始照明时间-小时
+ 747   5                {
+ 748   6                  global.set.startLightHour == 23 ? (global.set.startLightHour = 0):(++global.set.startLightHour);
+ 749   6                }break;
+ 750   5                case rs_sLM:  //加 开始照明时间-分钟
+ 751   5                {
+ 752   6                  global.set.startLightMinute == 59 ? (global.set.startLightMinute = 0):(++global.set.startLightMinute
+             -);
+ 753   6                }break;
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 14  
+
+ 754   5                case rs_kLH:  //加 持续照明时间-小时
+ 755   5                {
+ 756   6                  global.set.keepLightHour == 23 ? (global.set.keepLightHour = 0):(++global.set.keepLightHour);
+ 757   6                }break;
+ 758   5                case rs_kLM:  //加 持续照明时间-分钟
+ 759   5                {
+ 760   6                  global.set.keepLightMinute == 59 ? (global.set.keepLightMinute = 0):(++global.set.keepLightMinute);
+ 761   6                }break;
+ 762   5                case rs_sWH:  //加 开始浇水时间-小时
+ 763   5                {
+ 764   6                  global.set.startWaterHour == 23 ? (global.set.startWaterHour = 0):(++global.set.startWaterHour);
+ 765   6                }break;
+ 766   5                case rs_sWM:  //加 开始浇水时间-分钟
+ 767   5                {
+ 768   6                  global.set.startWaterMinute == 59 ? (global.set.startWaterMinute = 0):(++global.set.startWaterMinute
+             -);
+ 769   6                }break;
+ 770   5                case rs_kWH:  //加 持续浇水时间-小时
+ 771   5                {
+ 772   6                  global.set.keepWaterHour == 23 ? (global.set.keepWaterHour = 0):(++global.set.keepWaterHour);
+ 773   6                }break;
+ 774   5                case rs_kWM:  //加 持续浇水时间-分钟
+ 775   5                {
+ 776   6                  global.set.keepWaterMinute == 59 ? (global.set.keepWaterMinute = 0):(++global.set.keepWaterMinute);
+ 777   6                }break;
+ 778   5                case rs_wCD:  //加 浇水周期-天
+ 779   5                {
+ 780   6                  global.set.waterCycleDay == 30 ? (global.set.waterCycleDay = 1):(++global.set.waterCycleDay);
+ 781   6                }break;
+ 782   5                case rs_rtcH: //加 rtc时间-小时
+ 783   5                {
+ 784   6                  global.set.hour == 23 ? (global.set.hour = 0):(++global.set.hour);
+ 785   6                }break;
+ 786   5                case rs_rtcM: //加 rtc时间-分钟
+ 787   5                {
+ 788   6                  global.set.minute == 59 ? (global.set.minute = 0):(++global.set.minute);
+ 789   6                }break;
+ 790   5              }
+ 791   4            }
+ 792   3          }break;
+ 793   2          //////////////////////////////////////////////////////////持续按照明键--即设置模式下的连�
+             -�+-//////////////////////////////////////////////////////////
+ 794   2          case shortlongKey1:
+ 795   2          {
+ 796   3            global.set.switchTimeCount = 0; //清除设置状态下的自动切换计时
+ 797   3            
+ 798   3            if(global.work.runState < rs_sLH) break;
+ 799   3            
+ 800   3            switch (global.work.runState)
+ 801   3            {
+ 802   4              case rs_sLH:  //减 开始照明时间-小时
+ 803   4              {
+ 804   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 805   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 806   5                {
+ 807   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 808   6                  global.set.startLightHour == 0 ? (global.set.startLightHour = 23):(--global.set.startLightHour);
+ 809   6                }
+ 810   5              }break;
+ 811   4              case rs_sLM:  //减 开始照明时间-分钟
+ 812   4              {
+ 813   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 15  
+
+ 814   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 815   5                {
+ 816   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 817   6                  global.set.startLightMinute == 0 ? (global.set.startLightMinute = 59):(--global.set.startLightMinute
+             -);
+ 818   6                }
+ 819   5              }break;
+ 820   4              case rs_kLH:  //减 持续照明时间-小时
+ 821   4              {
+ 822   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 823   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 824   5                {
+ 825   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 826   6                  global.set.keepLightHour == 0 ? (global.set.keepLightHour = 23):(--global.set.keepLightHour);
+ 827   6                }
+ 828   5              }break;
+ 829   4              case rs_kLM:  //减 持续照明时间-分钟
+ 830   4              {
+ 831   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 832   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 833   5                {
+ 834   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 835   6                  global.set.keepLightMinute == 0 ? (global.set.keepLightMinute = 59):(--global.set.keepLightMinute);
+ 836   6                }
+ 837   5              }break;
+ 838   4              case rs_sWH:  //减 开始浇水时间-小时
+ 839   4              {
+ 840   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 841   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 842   5                {
+ 843   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 844   6                  global.set.startWaterHour == 0 ? (global.set.startWaterHour = 23):(--global.set.startWaterHour);
+ 845   6                }
+ 846   5              }break;
+ 847   4              case rs_sWM:  //减 开始浇水时间-分钟
+ 848   4              {
+ 849   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 850   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 851   5                {
+ 852   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 853   6                  global.set.startWaterMinute == 0 ? (global.set.startWaterMinute = 59):(--global.set.startWaterMinute
+             -);
+ 854   6                }
+ 855   5              }break;
+ 856   4              case rs_kWH:  //减 持续浇水时间-小时
+ 857   4              {
+ 858   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 859   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 860   5                {
+ 861   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 862   6                  global.set.keepWaterHour == 0 ? (global.set.keepWaterHour = 23):(--global.set.keepWaterHour);
+ 863   6                }
+ 864   5              }break;
+ 865   4              case rs_kWM:  //减 持续浇水时间-分钟
+ 866   4              {
+ 867   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 868   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 869   5                {
+ 870   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 871   6                  global.set.keepWaterMinute == 0 ? (global.set.keepWaterMinute = 59):(--global.set.keepWaterMinute);
+ 872   6                }
+ 873   5              }break;
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 16  
+
+ 874   4              case rs_wCD:  //减 浇水周期-天
+ 875   4              {
+ 876   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 877   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 878   5                {
+ 879   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 880   6                  global.set.waterCycleDay == 1 ? (global.set.waterCycleDay = 30):(--global.set.waterCycleDay);
+ 881   6                }
+ 882   5              }break;
+ 883   4              case rs_rtcH: //减 rtc时间-小时
+ 884   4              {
+ 885   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 886   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 887   5                {
+ 888   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 889   6                  global.set.hour == 0 ? (global.set.hour = 23):(--global.set.hour);
+ 890   6                }
+ 891   5              }break;
+ 892   4              case rs_rtcM: //减 rtc时间-分钟
+ 893   4              {
+ 894   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 895   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 896   5                {
+ 897   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 898   6                  global.set.minute == 0 ? (global.set.minute = 59):(--global.set.minute);
+ 899   6                }
+ 900   5              }break;
+ 901   4            }
+ 902   3          }break;
+ 903   2          //////////////////////////////////////////////////////////持续按浇水键--即设置模式下的连�
+             -�+-//////////////////////////////////////////////////////////
+ 904   2          case shortlongKey2:
+ 905   2          {
+ 906   3            global.set.switchTimeCount = 0; //清除设置状态下的自动切换计时
+ 907   3            
+ 908   3            if(global.work.runState < rs_sLH) break;
+ 909   3      
+ 910   3            switch (global.work.runState)
+ 911   3            {
+ 912   4              case rs_sLH:  //加 开始照明时间-小时
+ 913   4              {
+ 914   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 915   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 916   5                {
+ 917   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 918   6                  global.set.startLightHour == 23 ? (global.set.startLightHour = 0):(++global.set.startLightHour);
+ 919   6                }
+ 920   5              }break;
+ 921   4              case rs_sLM:  //加 开始照明时间-分钟
+ 922   4              {
+ 923   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 924   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 925   5                {
+ 926   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 927   6                  global.set.startLightMinute == 59 ? (global.set.startLightMinute = 0):(++global.set.startLightMinute
+             -);
+ 928   6                }
+ 929   5              }break;
+ 930   4              case rs_kLH:  //加 持续照明时间-小时
+ 931   4              {
+ 932   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 933   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 17  
+
+ 934   5                {
+ 935   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 936   6                  global.set.keepLightHour == 23 ? (global.set.keepLightHour = 0):(++global.set.keepLightHour);
+ 937   6                }
+ 938   5              }break;
+ 939   4              case rs_kLM:  //加 持续照明时间-分钟
+ 940   4              {
+ 941   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 942   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 943   5                {
+ 944   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 945   6                  global.set.keepLightMinute == 59 ? (global.set.keepLightMinute = 0):(++global.set.keepLightMinute);
+ 946   6                }
+ 947   5              }break;
+ 948   4              case rs_sWH:  //加 开始浇水时间-小时
+ 949   4              {
+ 950   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 951   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 952   5                {
+ 953   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 954   6                  global.set.startWaterHour == 23 ? (global.set.startWaterHour = 0):(++global.set.startWaterHour);
+ 955   6                }
+ 956   5              }break;
+ 957   4              case rs_sWM:  //加 开始浇水时间-分钟
+ 958   4              {
+ 959   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 960   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 961   5                {
+ 962   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 963   6                  global.set.startWaterMinute == 59 ? (global.set.startWaterMinute = 0):(++global.set.startWaterMinute
+             -);
+ 964   6                }
+ 965   5              }break;
+ 966   4              case rs_kWH:  //加 持续浇水时间-小时
+ 967   4              {
+ 968   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 969   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 970   5                {
+ 971   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 972   6                  global.set.keepWaterHour == 23 ? (global.set.keepWaterHour = 0):(++global.set.keepWaterHour);
+ 973   6                }
+ 974   5              }break;
+ 975   4              case rs_kWM:  //加 持续浇水时间-分钟
+ 976   4              {
+ 977   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 978   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 979   5                {
+ 980   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 981   6                  global.set.keepWaterMinute == 59 ? (global.set.keepWaterMinute = 0):(++global.set.keepWaterMinute);
+ 982   6                }
+ 983   5              }break;
+ 984   4              case rs_wCD:  //加 浇水周期-天
+ 985   4              {
+ 986   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 987   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 988   5                {
+ 989   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 990   6                  global.set.waterCycleDay == 30 ? (global.set.waterCycleDay = 1):(++global.set.waterCycleDay);
+ 991   6                }
+ 992   5              }break;
+ 993   4              case rs_rtcH: //加 rtc时间-小时
+ 994   4              {
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 18  
+
+ 995   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+ 996   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+ 997   5                {
+ 998   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+ 999   6                  global.set.hour == 23 ? (global.set.hour = 0):(++global.set.hour);
+1000   6                }
+1001   5              }break;
+1002   4              case rs_rtcM: //加 rtc时间-分钟
+1003   4              {
+1004   5                ioData.key.modeLock = shortlongKey1;  //锁定在该模式,避免过久的长按触发长按键值
+1005   5                if(ioData.key.pressTime_100ms >= shortlongtime100)  //ms触发一次
+1006   5                {
+1007   6                  ioData.key.timeCount = 0; //清空计数，重新计时
+1008   6                  global.set.minute == 59 ? (global.set.minute = 0):(++global.set.minute);
+1009   6                }
+1010   5              }break;
+1011   4            }
+1012   3          }break;
+1013   2          //////////////////////////////////////////////////////////长按照明键///////////////////////////////
+             -///////////////////////////
+1014   2          case longKey1:
+1015   2          {
+1016   3            if(global.work.runState <= rs_normal2)
+1017   3            {
+1018   4              global.set.setSateData = 0x01;  //连接wifi
+1019   4              if(global.set.setSateSate == free)
+1020   4              {
+1021   5                global.set.setSateSate = start; //将在 workFunc 中发送设备状态设置请求
+1022   5              }
+1023   4            }
+1024   3          }break;
+1025   2          //////////////////////////////////////////////////////////长按浇水键///////////////////////////////
+             -///////////////////////////
+1026   2          case longKey2:
+1027   2          {
+1028   3            if(global.work.runState <= rs_normal2)
+1029   3            {
+1030   4              global.set.setAppointmentFlag = true; //置位预约设置标志，将在得到应答后在 workFunc �
+             -��被使用
+1031   4              global.set.setDataSate = start; //将在 workFunc 中发送设置参数获取请求
+1032   4            }
+1033   3          }break;
+1034   2          //////////////////////////////////////////////////////////长按组合键///////////////////////////////
+             -///////////////////////////
+1035   2          case longDoubleKey:
+1036   2          {
+1037   3            if(global.work.runState <= rs_normal2)
+1038   3            {
+1039   4              global.set.setRtcFlag = true; //置位预约设置标志
+1040   4              global.set.setDataSate = start; //将在 workFunc 中发送设置参数获取请求
+1041   4            }
+1042   3          }break;
+1043   2          default:  break;
+1044   2        }
+1045   1      }
+1046          
+1047          ////////////////////////////////////////////////////LED显示部分///////////////////////////////////////
+             -///////////////////////////////
+1048          
+1049          void setDisplayNumber(unsigned char num1,unsigned char num2,unsigned char num3)
+1050          {
+1051   1        global.display.number1 = num1;
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 19  
+
+1052   1        global.display.number2 = num2;
+1053   1        global.display.number3 = num3;
+1054   1      }
+1055          
+1056          void displayLed(void)
+1057          {
+1058   1        static unsigned int LedBlinkTimerCount = 0,LedBlinkTimerCount1 = 0;
+1059   1        unsigned char timeBase0 = 250,timeBase1 = 125;
+1060   1        static unsigned char timeBase2 = 0,timeBase3 = 0;
+1061   1        LedBlinkTimerCount >= timeBase0? LedBlinkTimerCount = 0: ++LedBlinkTimerCount;
+1062   1        LedBlinkTimerCount1 >= timeBase2? LedBlinkTimerCount1 = 0: ++LedBlinkTimerCount1;
+1063   1      
+1064   1        LED_EN3;
+1065   1        switch(global.display.wifi)
+1066   1        { //////在定时器中断中 4ms 进入一次
+1067   2          case offline: resetLed(0); break; //离线,常灭
+1068   2          case connecting:  //一键配置,周期40ms,亮20ms,灭20ms
+1069   2          {
+1070   3            timeBase2 = 100; timeBase3 = 50;
+1071   3            LedBlinkTimerCount1 < timeBase3? setLed(0):resetLed(0);
+1072   3          }break;
+1073   2          case connectToAp: //连接路由,周期100ms,亮20ms,灭80ms
+1074   2          {
+1075   3            timeBase2 = 250; timeBase3 = 50;
+1076   3            LedBlinkTimerCount1 < timeBase3? setLed(0):resetLed(0);
+1077   3          }break;
+1078   2          case connectToService:  //连接路由,周期100ms,亮50ms,灭50ms
+1079   2          {
+1080   3            timeBase2 = 250; timeBase3 = 125;
+1081   3            LedBlinkTimerCount1 < timeBase3? setLed(0):resetLed(0);
+1082   3          }break;
+1083   2          case online: setLed(0); break;  //在线,常亮
+1084   2        }
+1085   1        switch(global.display.appointment)
+1086   1        {
+1087   2          case light: setLed(1); break;
+1088   2          case dark: resetLed(1); break;
+1089   2          case blink:
+1090   2          {
+1091   3            LedBlinkTimerCount >= timeBase1? setLed(1):resetLed(1);
+1092   3          }break;
+1093   2        }
+1094   1        switch(global.display.light)
+1095   1        {
+1096   2          case light: setLed(2); break;
+1097   2          case dark: resetLed(2); break;
+1098   2          case blink:
+1099   2          {
+1100   3            LedBlinkTimerCount >= timeBase1? setLed(2):resetLed(2);
+1101   3          }break;
+1102   2        }
+1103   1        switch(global.display.water)
+1104   1        {
+1105   2          case light: setLed(3); break;
+1106   2          case dark: resetLed(3); break;
+1107   2          case blink:
+1108   2          {
+1109   3            LedBlinkTimerCount >= timeBase1? setLed(3):resetLed(3);
+1110   3          }break;
+1111   2        }
+1112   1        switch(global.display.nowater)
+1113   1        {
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 20  
+
+1114   2          case light: setLed(4); break;
+1115   2          case dark: resetLed(4); break;
+1116   2          case blink:
+1117   2          {
+1118   3            LedBlinkTimerCount >= timeBase1? setLed(4):resetLed(4);
+1119   3          }break;
+1120   2        }
+1121   1      }
+1122          
+1123          ////////////////////////////////////////////////////通信数据解析////////////////////////////////////
+             -//////////////////////////////////
+1124          
+1125          void parseDataFromBottom(void)
+1126          {
+1127   1        unsigned char len = 0,sum = 0;
+1128   1        unsigned char buff[32] = {0};
+1129   1        unsigned int cmd = 0,temp = 0;
+1130   1        len = oneWire_read(buff);
+1131   1        if(len != 0)  //大于0则说明有数据包
+1132   1        {
+1133   2          sum = figureSum(buff,len-1);
+1134   2          if(buff[0] == 0x96 && buff[len-1] == sum) //确认包头和校验
+1135   2          {
+1136   3            cmd = buff[2]<<8 | buff[3];
+1137   3            switch(cmd)
+1138   3            {
+1139   4              case 0x0002:  //设备状态获取的响应
+1140   4              {
+1141   5                global.device.wifi = buff[4]; //wifi指示灯的状态
+1142   5                global.device.appointment = buff[5];  //预约指示灯的状态
+1143   5                global.device.light = buff[6];  //照明指示灯的状态
+1144   5                global.device.water = buff[7];  //浇水指示灯的状态
+1145   5                global.device.nowater = buff[8];  //缺水指示灯的状态
+1146   5                temp = buff[9]<<8 | buff[10]; //距离下一次开始照明的倒计时，单位分钟
+1147   5                global.device.nextStartLightCountDown = temp;
+1148   5                // if(temp > 999) global.device.nextStartLightCountDown = 999;
+1149   5                // else global.device.nextStartLightCountDown = temp;
+1150   5                temp = buff[11]<<8 | buff[12];  //距离结束照明的倒计时，单位分钟
+1151   5                global.device.endLightCountDown = temp;
+1152   5                // if(temp > 999) global.device.endLightCountDown = 999;
+1153   5                // else global.device.endLightCountDown = temp;
+1154   5                temp  = buff[13]<<8 | buff[14]; //距离下一次开始浇水的倒计时，单位分钟
+1155   5                global.device.nextStartWaterCountDown = temp;
+1156   5                // if(temp > 999) global.device.nextStartWaterCountDown = 999;
+1157   5                // else global.device.nextStartWaterCountDown = temp;
+1158   5                temp = buff[15]<<8 | buff[16];  //距离结束浇水的倒计时，单位分钟
+1159   5                global.device.endWaterCountDown = temp;
+1160   5                // if(temp > 999) global.device.endWaterCountDown = 999;
+1161   5                // else global.device.endWaterCountDown = temp;
+1162   5      
+1163   5                // global.set.setSateSate = free;
+1164   5              }break;
+1165   4              case 0x0004:  //设置参数获取的响应
+1166   4              {
+1167   5                if(buff[4] > 23) global.set.hour = 23;  //判断是否超出范围
+1168   5                else global.set.hour = buff[4]; //rtc时间-小时
+1169   5                if(buff[5] > 59) global.set.minute = 59;
+1170   5                else global.set.minute = buff[5]; //rtc时间-分钟
+1171   5                if(buff[6] > 23) global.set.startLightHour = 23;
+1172   5                else global.set.startLightHour = buff[6]; //预约开始照明的时间-小时
+1173   5                if(buff[7] > 59) global.set.startLightMinute = 59;
+1174   5                else global.set.startLightMinute = buff[7]; //预约开始照明的时间-分钟
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 21  
+
+1175   5                if(buff[8] > 23) global.set.keepLightHour = 23;
+1176   5                else global.set.keepLightHour = buff[8];  //预约持续照明的时间-小时
+1177   5                if(buff[9] > 59) global.set.keepLightMinute = 59;
+1178   5                else global.set.keepLightMinute = buff[9];  //预约持续照明的时间-分钟
+1179   5                if(buff[10] > 23) global.set.startWaterHour = 23;
+1180   5                else global.set.startWaterHour = buff[10];  //预约开始浇水的时间-小时
+1181   5                if(buff[11] > 59) global.set.startWaterMinute = 59;
+1182   5                else global.set.startWaterMinute = buff[11];  //预约开始浇水的时间-分钟
+1183   5                if(buff[12] > 23) global.set.keepWaterHour = 23;
+1184   5                else global.set.keepWaterHour = buff[12]; //预约持续浇水的时间-小时
+1185   5                if(buff[13] > 59) global.set.keepWaterMinute = 59;
+1186   5                else global.set.keepWaterMinute = buff[13]; //预约持续浇水的时间-分钟
+1187   5                if(buff[14] > 30) global.set.waterCycleDay = 30;
+1188   5                else global.set.waterCycleDay = buff[14]; //预约浇水的周期-天
+1189   5                //必须在获取完参数后才可以切换状态
+1190   5                if(global.set.setDataSate == waitAck) //如果设置状态处于待应答
+1191   5                {
+1192   6                  global.set.setDataSate = ing; //将状态切换到设置中
+1193   6                }
+1194   5              }break;
+1195   4              case 0x0007:  //设置参数完成的响应
+1196   4              {
+1197   5                if(global.set.setDataSate == waitAck) //如果设置状态处于待应答
+1198   5                {
+1199   6                  global.set.setDataSate = ack; //将状态切换到已应答
+1200   6                }
+1201   5              }break;
+1202   4            }
+1203   3          }
+1204   2        }
+1205   1      }
+1206          
+1207          /////////////////////////////////////////////////单总线通信//////////////////////////////////////////
+             -//////////////
+1208          
+1209          #define ONE_WIRE_A P06
+1210          #define ONE_WIRE_A_MODE P06_Quasi_Mode
+1211          #define ONE_WIRE_A_H set_P06
+1212          #define ONE_WIRE_A_L clr_P06
+1213          #define ONE_WIRE_B P07
+1214          #define ONE_WIRE_B_MODE P07_Quasi_Mode
+1215          #define ONE_WIRE_B_H set_P07
+1216          #define ONE_WIRE_B_L clr_P07
+1217          
+1218          #define ONE_WIRE_READ ONE_WIRE_A
+1219          #define ONE_WIRE_WRITE(b) if(b) ONE_WIRE_B_H; else ONE_WIRE_B_L
+1220          
+1221          void OneWire_init(void)
+1222          {
+1223   1        ONE_WIRE_A_MODE;
+1224   1        ONE_WIRE_B_MODE;
+1225   1      
+1226   1        ONE_WIRE_WRITE(1);  //拉高以释放写总线
+1227   1      }
+1228          
+1229          void oneWire_start(void)
+1230          {
+1231   1        ONE_WIRE_WRITE(0);  //拉低写总线作为起始信号
+1232   1        Timer0_Delay1ms(10);
+1233   1      }
+1234          
+1235          void oneWire_stop(void)
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 22  
+
+1236          {
+1237   1        ONE_WIRE_WRITE(1);  //拉高以释放写总线作为停止信号
+1238   1      }
+1239          
+1240          //
+1241          //  写一个字节八位数据
+1242          //
+1243          void oneWire_writeByte(unsigned char dat)
+1244          {
+1245   1        unsigned char i = 8;
+1246   1      
+1247   1        while(i--)
+1248   1        {
+1249   2          ONE_WIRE_WRITE(1);  //拉高写总线传输一位数据
+1250   2          if(dat & 0x80)
+1251   2            Timer0_Delay100us(5); //写高电平
+1252   2          else
+1253   2            Timer0_Delay100us(2); //写低电平
+1254   2          dat <<= 1;
+1255   2          ONE_WIRE_WRITE(0);  //拉低写总线作为位之间的间隔
+1256   2          Timer0_Delay100us(2);
+1257   2        }
+1258   1      }
+1259          
+1260          //
+1261          //  写数据包，通信规则中，起始信号后的第一个字节必须为数据包的长度(该字节
+             -不计算在长度内)
+1262          //
+1263          void oneWire_write(unsigned char* buff,unsigned char len)
+1264          {
+1265   1        oneWire_start();  //起始信号
+1266   1        oneWire_writeByte(len); //发送数据长度
+1267   1        while(len--)  //数据包长度
+1268   1        {
+1269   2          oneWire_writeByte(*buff); //发送一个字节的数据
+1270   2          if(len != 0) ++buff;  //防止溢出
+1271   2        }
+1272   1        oneWire_stop(); //停止信号
+1273   1      }
+1274          
+1275          //
+1276          //  读数据包，成功后返回数据包长度,失败为0
+1277          //
+1278          unsigned char oneWire_read(unsigned char* buff)
+1279          {
+1280   1        unsigned int timeOut = 0;
+1281   1        unsigned char count = 0,dat = 0,transFlag = 0,index = 0,lenFlag = 0,lenCount = 0,len = 0;
+1282   1        if(!ONE_WIRE_READ)  //低电平，收到起始信号
+1283   1        {
+1284   2          while(1)
+1285   2          {
+1286   3            if(ONE_WIRE_READ) //高电平，计算持续时间
+1287   3            {
+1288   4              ++count;  //记录高电平持续时间
+1289   4              transFlag = 1;  //电平跳变标志
+1290   4            }
+1291   3            else if(!ONE_WIRE_READ && transFlag == 1) //读总线为低电平并且只有在电平跳变后才进�
+             -�
+1292   3            { //一位数据结束，判断之前的高电平传输的是1还是0
+1293   4              dat <<= 1;
+1294   4              if(count > 3) //大于300us就算高电平
+1295   4                dat |= 1;
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 23  
+
+1296   4              count = 0;  //清高电平计数
+1297   4              timeOut = 0;  //清超时计数
+1298   4              transFlag = 0;  //清电平跳变标志
+1299   4              if(++index == 8)  //每读八位，即一个字节进入一次
+1300   4              {
+1301   5                if(lenFlag == 0)  //起始信号后的第一个字节，用于说明数据包的长度
+1302   5                {
+1303   6                  lenFlag = 1;  //已接收到长度
+1304   6                  len = dat;
+1305   6                }
+1306   5                else  //数据包的内容
+1307   5                {
+1308   6                  *buff = dat;
+1309   6                  if(++lenCount == len) //数据包接收完成
+1310   6                  {
+1311   7                    Timer0_Delay100us(3); //等低电平过去，以防止连续传输时错误的将用作间隔的低
+             -电平识别为起始信号
+1312   7                    return len; //结束,并返回长度
+1313   7                  }
+1314   6                  else  //没接收完成就继续接收，这里单独自增是为了防止溢出
+1315   6                  {
+1316   7                    ++buff;
+1317   7                  }
+1318   6                }
+1319   5                index = 0;  //清计数
+1320   5                dat = 0x00; //清变量
+1321   5              }
+1322   4            }
+1323   3            Timer0_Delay100us(1); //超时处理
+1324   3            if(++timeOut > 200) return 0; //超时
+1325   3          }
+1326   2        }
+1327   1        return 0;
+1328   1      }
+1329          
+1330          
+1331          //
+1332          //和校验计算
+1333          //unsigned char len : 需要计算的长度
+1334          //
+1335          unsigned char figureSum(unsigned char* buff,unsigned char len)
+1336          {
+1337   1        unsigned char sum = 0;
+1338   1      
+1339   1        while(len--)
+1340   1        {
+1341   2          sum += *buff;
+1342   2          if(len != 0) ++buff;  //防止溢出
+1343   2        }
+1344   1        return sum;
+1345   1      }
+1346          
+1347          ///////////////////////////////////////////////串口0接收解析////////////////////////////////////////
+             -//////////////
+1348          
+1349          // //
+1350          // //和校验计算
+1351          // //unsigned char len : 需要计算的长度
+1352          // //
+1353          // unsigned char figureSum(unsigned char* buff,unsigned char len)
+1354          // {
+1355          //  unsigned char sum = 0;
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 24  
+
+1356          
+1357          //  sum += *buff++;
+1358          //  while(--len)
+1359          //  {
+1360          //    sum += *buff++;
+1361          //  }
+1362          //  return sum;
+1363          // }
+1364          
+1365          // void uart0_fun(unsigned char* buff)
+1366          // {
+1367          //  switch(buff[3]) //下标2和3为消息类型，但目前2为0x00所以判断3即可
+1368          //  {
+1369          //    case 0x02:  //设备状态获取的响应
+1370          //    {
+1371          //      //wifi指示灯的状态
+1372          //      global.device.wifi = buff[4]; //WiFi指示灯状态
+1373          //      global.device.appointment = buff[5];  //预约指示灯的状态
+1374          //      global.device.light = buff[6];  //照明指示灯的状态
+1375          //      global.device.water = buff[7];  //浇水指示灯的状态
+1376          //      global.device.nowater = buff[8];  //缺水指示灯的状态
+1377          //      global.device.nextStartLightCountDown = buff[9]<<8 | buff[10];  //距离下一次开始照明的倒�
+             -�时，单位分钟
+1378          //      global.device.endLightCountDown = buff[11]<<8 | buff[12]; //距离结束照明的倒计时，单位�
+             -��钟
+1379          //      global.device.nextStartWaterCountDown = buff[13]<<8 | buff[14]; //距离下一次开始浇水的倒�
+             -��时，单位分钟
+1380          //      global.device.endWaterCountDown = buff[15]<<8 | buff[16]; //距离结束浇水的倒计时，单位�
+             -��钟
+1381          
+1382          //      global.set.setSateSate = end;
+1383          //    }break;
+1384          //    case 0x04:  //设置参数获取的响应
+1385          //    {
+1386          //      global.set.hour = buff[4];  //rtc时间-小时
+1387          //      global.set.minute = buff[5];  //rtc时间-分钟
+1388          //      global.set.startLightHour = buff[6];  //预约开始照明的时间-小时
+1389          //      global.set.startLightMinute = buff[7];  //预约开始照明的时间-分钟
+1390          //      global.set.keepLightHour = buff[8]; //预约持续照明的时间-小时
+1391          //      global.set.keepLightMinute = buff[9]; //预约持续照明的时间-分钟
+1392          //      global.set.startWaterHour = buff[10]; //预约开始浇水的时间-小时
+1393          //      global.set.startWaterMinute = buff[11]; //预约开始浇水的时间-分钟
+1394          //      global.set.keepWaterHour = buff[12];  //预约持续浇水的时间-小时
+1395          //      global.set.keepWaterMinute = buff[13];  //预约持续浇水的时间-分钟
+1396          //      global.set.waterCycleDay = buff[14];  //预约浇水的周期-天
+1397          //      //必须在获取完参数后才可以切换状态
+1398          //      if(global.set.setDataSate == waitAck) //如果设置状态处于待应答
+1399          //      {
+1400          //        global.set.setDataSate = ing; //将状态切换到设置中
+1401          //      }
+1402          //    }break;
+1403          //    case 0x07:  //设置参数完成的响应
+1404          //    {
+1405          //      if(global.set.setDataSate == waitAck) //如果设置状态处于待应答
+1406          //      {
+1407          //        global.set.setDataSate = ack; //将状态切换到已应答
+1408          //      }
+1409          //    }break;
+1410          //  }
+1411          // }
+1412          
+1413          // void uart0_isr(unsigned char dat)
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 25  
+
+1414          // {
+1415          //  unsigned char i,sum = 0;
+1416          //  //判断接收的数据是否符合通信格式
+1417          //  if(global.uart.nowIndex == 0 && dat == 0x96)  //头
+1418          //  {
+1419          //    global.uart.recTimeOutCount = 1;  //开启超时计时，为1则计时，如果超时，则放弃当�
+             -�数据包，收到数据包则刷新
+1420          //    global.uart.recBuff[global.uart.nowIndex] = dat;
+1421          //    ++global.uart.nowIndex;
+1422          //  }
+1423          //  else if(global.uart.nowIndex == 1)  //数据长度
+1424          //  {
+1425          //    global.uart.recTimeOutCount = 1;  //重置超时计时，如果为0则不计时，如果超时，则�
+             -�弃当前数据包，收到数据包则刷新
+1426          //    global.uart.recBuff[global.uart.nowIndex] = dat;  //长度：从头到校验
+1427          //    ++global.uart.nowIndex;
+1428          //  }
+1429          //  else if(global.uart.nowIndex >= 2 && global.uart.nowIndex <= global.uart.recBuff[1]-2)  //减去了校�
+             -��字节，因为下标比实际长度小1，所以-2
+1430          //  {
+1431          //    global.uart.recTimeOutCount = 1;  //重置超时计时，如果为0则不计时，如果超时，则�
+             -�弃当前数据包，收到数据包则刷新
+1432          //    global.uart.recBuff[global.uart.nowIndex] = dat;  //数据
+1433          //    ++global.uart.nowIndex;
+1434          //  }
+1435          //  else if(global.uart.nowIndex == global.uart.recBuff[1]-1) //校验
+1436          //  {
+1437          //    //之后更改模式，将耗时操作都移走
+1438          
+1439          //    global.uart.recTimeOutCount = 0;  //关闭超时计时，为0则不计时
+1440          //    global.uart.sendTimeOutCount = 0;
+1441          //    for(i = 0;i <= global.uart.recBuff[1] - 2;i++)  //计算校验和
+1442          //    {
+1443          //      sum += global.uart.recBuff[i];
+1444          //    }
+1445          //    if(sum == dat)  //校验通过
+1446          //    {
+1447          //      global.uart.recBuff[global.uart.nowIndex] = dat;  //校验
+1448          //      uart0_fun(global.uart.recBuff); //功能判断
+1449          //    }
+1450          //    global.uart.nowIndex = 0;
+1451          //  }
+1452          // }
+1453          
+1454          // void delay(unsigned int a)
+1455          // {
+1456          //  unsigned int b = 0;
+1457          //  for(;a > 0;a--)
+1458          //  {
+1459          //    for(;b < 100;b++);
+1460          //  }
+1461          // }
+1462          
+1463          // void uart0_sendData(unsigned char* buff,unsigned char len)
+1464          // {
+1465          //  global.uart.sendTimeOutCount = 1;
+1466            
+1467          //  while(len--)
+1468          //  {
+1469          //    SBUF = *buff++;
+1470          //      while(TI==0);
+1471          //    delay(20);
+C51 COMPILER V9.60.0.0   FUNC                                                              12/20/2019 13:45:52 PAGE 26  
+
+1472          //  }
+1473          // }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   7790    ----
+   CONSTANT SIZE    =     32    ----
+   XDATA SIZE       =     10      58
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

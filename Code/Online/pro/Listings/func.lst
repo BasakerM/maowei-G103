@@ -1,0 +1,1928 @@
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 1   
+
+
+C51 COMPILER V9.60.0.0, COMPILATION OF MODULE FUNC
+OBJECT MODULE PLACED IN .\Objects\func.obj
+COMPILER INVOKED BY: C:\Users\M\AppData\Local\Keil\Keil_v4\C51\BIN\C51.EXE ..\lib\user\src\func.c LARGE OPTIMIZE(8,SPEED
+                    -) BROWSE INCDIR(..\lib\n76e003\Include;..\lib\user\inc) DEFINE(FOSC_160000) DEBUG OBJECTEXTEND PRINT(.\Listings\func.lst
+                    -) TABS(2) OBJECT(.\Objects\func.obj)
+
+line level    source
+
+   1          #include "func.h"
+   2          
+   3          void updateDeviceState(void);
+   4          void configWifi(void);
+   5          void sendDeviceStateToWifi(void);
+   6          void topRequestForSet(void);
+   7          
+   8          void sendDeviceStateToTop(void);
+   9          void sendSetDataToTop(void);
+  10          void sendAckToTop(void);
+  11          
+  12          unsigned char isNoWater(void);
+  13          
+  14          void parseDataFromTop(void);
+  15          void OneWire_init(void);
+  16          void oneWire_write(unsigned char* buff,unsigned char len);
+  17          unsigned char oneWire_read(unsigned char* buff);
+  18          unsigned char figureSum(unsigned char* buff,unsigned char len);
+  19          
+  20          void parseDataFromWifi(void);
+  21          unsigned char figureSum0(unsigned char* buff,unsigned char len);
+  22          void uart0_sendData(unsigned char* buff,unsigned char len);
+  23          
+  24          void initRtc(void);
+  25          void firstInitRtc(void);
+  26          void rtcGetTime(void);
+  27          void rtcSetTime(void);
+  28          
+  29          unsigned char isFristStart(void);
+  30          void saveDataToFlash(void);
+  31          void readDataFromFlash(void);
+  32          
+  33          #define initWifiResetPin() P05_PushPull_Mode;set_P05
+  34          #define WifiReset() P05_PushPull_Mode;clr_P05
+  35          
+  36          void init(void)
+  37          {
+  38   1        LIGHT_CLOSE;
+  39   1        global.device.light = false;
+  40   1        global.set.light = false;
+  41   1        WATER_CLOSE;
+  42   1        global.device.water = false;
+  43   1        global.set.water = false;
+  44   1        OneWire_init();
+  45   1        initRtc();
+  46   1        initWifiResetPin();
+  47   1        // Timer3_Delay100ms(5);
+  48   1      
+  49   1        //如果为第一次开机
+  50   1        if(isFristStart() == true)
+  51   1        {
+  52   2          firstInitRtc(); //初始化rtc设置
+  53   2          //这里可以初始化预约数据，默认初始化为0
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 2   
+
+  54   2          global.set.startLightHour = 0;
+  55   2          global.set.startLightMinute = 0;
+  56   2          global.set.keepLightHour = 0;
+  57   2          global.set.keepLightMinute = 0;
+  58   2          global.set.endLightHour = 0;
+  59   2          global.set.endLightMinute = 0;
+  60   2          global.set.startWaterHour = 0;
+  61   2          global.set.startWaterHour = 0;
+  62   2          global.set.keepWaterHour = 0;
+  63   2          global.set.keepWaterMinute = 0;
+  64   2          global.set.endWaterHour = 0;
+  65   2          global.set.endWaterMinute = 0;
+  66   2          global.set.waterCycleDay = 1;
+  67   2      //    figureEndTime();
+  68   2          saveDataToFlash();
+  69   2        }
+  70   1        else
+  71   1        {
+  72   2          readDataFromFlash();  //读取预约数据
+  73   2        }
+  74   1        
+  75   1        // Timer3_Delay100ms(5);
+  76   1      }
+  77          
+  78          ///////////////////////////////////////////////Run//////////////////////////////////////////////////////
+  79          
+  80          //运行在定时器3中，中断时间为1ms
+  81          void run(void)
+  82          {
+  83   1        /////////////////////////处理一些计时功能//////////////////////////
+  84   1        if(++global.work.workTimeCount >= 2000) //2s
+  85   1        {
+  86   2          global.work.workTimeCount = 0;
+  87   2      
+  88   2          global.time.getTimeFlag = true; //获取一次rtc时间
+  89   2        }
+  90   1        //串口接收超时计时
+  91   1        if(global.uart.recTimeOutCount > 0 && global.uart.recTimeOutCount < 1000)
+  92   1        {
+  93   2          ++global.iouart.recTimeOutCount;
+  94   2        }
+  95   1      
+  96   1        if(global.uart.recvDataTimeOutFlag == false && global.uart.recvDataTimeOutClear == false) //未超时且�
+             -��在清理计时
+  97   1        {
+  98   2          if(++global.uart.recvDataTimeOutMs >= 1000) //1秒
+  99   2          {
+ 100   3            global.uart.recvDataTimeOutMs = 0;
+ 101   3            if(++global.uart.recvDataTimeOutSec >= 60)  //1分钟
+ 102   3            {
+ 103   4              global.uart.recvDataTimeOutSec = 0;
+ 104   4              if(++global.uart.recvDataTimeOutMinute >= 10) //10分钟
+ 105   4              {
+ 106   5                global.uart.recvDataTimeOutMs = 0;
+ 107   5                global.uart.recvDataTimeOutSec = 0;
+ 108   5                global.uart.recvDataTimeOutMinute = 0;
+ 109   5                global.uart.recvDataTimeOutFlag = true; //超时
+ 110   5              }
+ 111   4            }
+ 112   3          }
+ 113   2        }
+ 114   1        else if(global.uart.recvDataTimeOutFlag == true)  //十分钟没有收到来自WiFi的数据，则有可�
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 3   
+
+             -�错误进入一键配置,复位WiFi
+ 115   1        {
+ 116   2          if(++global.uart.recvDataTimeOutMs >= 500)  //500ms
+ 117   2          {
+ 118   3            global.uart.recvDataTimeOutMs = 0;
+ 119   3            global.uart.recvDataTimeOutSec = 0;
+ 120   3            global.uart.recvDataTimeOutMinute = 0;
+ 121   3            global.uart.recvDataTimeOutFlag = false;
+ 122   3            initWifiResetPin();
+ 123   3          }
+ 124   2          else
+ 125   2          {
+ 126   3            WifiReset();  //复位WiFi
+ 127   3          }
+ 128   2          
+ 129   2        }
+ 130   1      }
+ 131          
+ 132          //
+ 133          //运行在main-while中
+ 134          //用于执行一些耗时操作
+ 135          //
+ 136          void runMain(void)
+ 137          {
+ 138   1        static char lastMinute = -1;
+ 139   1      
+ 140   1        parseDataFromTop();
+ 141   1        parseDataFromWifi();
+ 142   1      
+ 143   1        //判断是否缺水
+ 144   1        if(isNoWater())
+ 145   1        {
+ 146   2          global.device.noWater = true;
+ 147   2          global.device.water = false;
+ 148   2          WATER_CLOSE;
+ 149   2          // global.set.noWater = true;
+ 150   2        }
+ 151   1        else
+ 152   1        {
+ 153   2          global.device.noWater = false;
+ 154   2          // global.set.noWater = false;
+ 155   2        }
+ 156   1      
+ 157   1        //获取RTC时间
+ 158   1        if(global.time.getTimeFlag == true)
+ 159   1        {
+ 160   2          rtcGetTime();
+ 161   2          global.time.getTimeFlag = false;
+ 162   2        }
+ 163   1        //每过一分钟执行的操作
+ 164   1        if(lastMinute != global.time.minute)
+ 165   1        {
+ 166   2          lastMinute = global.time.minute;  //记录当前的分钟
+ 167   2          // figureCountdown();
+ 168   2        }
+ 169   1      
+ 170   1      ///////////////////////////////////不再区分单机版和网络版,统一由WiFi模块控制逻辑等，
+             -单片机只负责数据中转//////////////////////////////////////////////
+ 171   1      
+ 172   1        updateDeviceState();  //更新设备状态
+ 173   1      
+ 174   1      ////////////////////////////////////////////////////////和 wifi 模块的通信//////////////////////////
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 4   
+
+             -///////////////////////////////////////
+ 175   1      /////////////////////////接收/////////////////////////
+ 176   1        // ///////// wifi 设置设备数据//////////
+ 177   1        if(global.work.wifiSetDeviceFlag == true)
+ 178   1        {
+ 179   2          global.device.light = global.set.light;
+ 180   2          if(global.device.light == true) { LIGHT_OPEN; }
+ 181   2          else { LIGHT_CLOSE; }
+ 182   2          global.device.water = global.set.water;
+ 183   2          if(global.device.water == true && global.device.noWater == false) { WATER_OPEN; } //
+ 184   2          else { WATER_CLOSE; global.device.water =  false; }
+ 185   2          global.device.getStateFlag = true;  //将更新的设备状态告诉从机
+ 186   2          global.work.wifiSetDeviceFlag = false;
+ 187   2        }
+ 188   1      /////////////////////////发送/////////////////////////
+ 189   1        ////////一键配置////////
+ 190   1        if(global.work.wifiConfigFlag == true)
+ 191   1        {
+ 192   2          global.work.wifiConfigFlag = false;
+ 193   2          configWifi();
+ 194   2        }
+ 195   1        /////////顶板请求设置设备数据/////////
+ 196   1        if(global.work.serventSetDevieDataFlag == true)
+ 197   1        {
+ 198   2          global.work.serventSetDevieDataFlag = false;
+ 199   2          topRequestForSet();
+ 200   2        }
+ 201   1        /////////往 wifi 发送设备数据////////
+ 202   1        if(global.work.wifiGetDeviceFlag == true)
+ 203   1        {
+ 204   2          global.work.wifiGetDeviceFlag = false;
+ 205   2          sendDeviceStateToWifi();
+ 206   2          if(global.device.wifi == online) rtcSetTime();  //判断时间差后，有条件选择设置与否
+ 207   2        }
+ 208   1      
+ 209   1      ////////////////////////////////////////////////////////和 顶板 的通信//////////////////////////////
+             -///////////////////////////////////
+ 210   1      /////////////////////////接收/////////////////////////
+ 211   1        //////////顶板的请求///////////////
+ 212   1        if(global.work.serventSetDevieSateFlag == true)
+ 213   1        {
+ 214   2          global.work.serventSetDevieSateFlag = false;
+ 215   2          switch(global.work.keyDo)
+ 216   2          {
+ 217   3            case 0x01: { global.device.wifi = connecting; global.work.wifiConfigFlag = true;}break;
+ 218   3            case 0x10: { global.set.light = false; global.work.serventSetDevieDataFlag = true;}break;
+ 219   3            case 0x11: { global.set.light = true; global.work.serventSetDevieDataFlag = true;}break;
+ 220   3            case 0x20: { global.set.water = false; global.work.serventSetDevieDataFlag = true;}break;
+ 221   3            case 0x21: { global.set.water = true; global.work.serventSetDevieDataFlag = true;}break;
+ 222   3          }
+ 223   2        }
+ 224   1      
+ 225   1      /////////////////////////发送/////////////////////////
+ 226   1        //////////往 顶板 发送设备数据///////////////////
+ 227   1        if(global.device.getStateFlag == true)  //收到设备状态设置请求或设备状态获取请求，他�
+             -��的响应相同
+ 228   1        {
+ 229   2          sendDeviceStateToTop();
+ 230   2          global.device.getStateFlag = false;
+ 231   2        }
+ 232   1        //////////往 顶板 发送设置数据///////////////////
+ 233   1        if(global.set.getDataFlag == true)
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 5   
+
+ 234   1        {
+ 235   2          global.set.getDataFlag = false;
+ 236   2          sendSetDataToTop();
+ 237   2        }
+ 238   1        //////////往 顶板 发送设置数据响应///////////////////
+ 239   1        if(global.set.setDatFlag == true) //收到设置参数设置请求
+ 240   1        {
+ 241   2          global.set.setDatFlag = false;
+ 242   2          sendAckToTop();
+ 243   2          if(global.set.setRtcTimeDataFlag == true) //等于0xff说明不修改rtc，那不等于时修改
+ 244   2          {
+ 245   3            rtcSetTime();
+ 246   3          }
+ 247   2          global.work.serventSetDevieDataFlag = true; //向WIFI发起设置请求
+ 248   2        }
+ 249   1      }
+ 250          
+ 251          //
+ 252          //更新设备状态
+ 253          //
+ 254          void updateDeviceState(void)
+ 255          {
+ 256   1        //更新 wifi 连接状态
+ 257   1        if(global.work.wifiStateUpdateFlag == true)
+ 258   1        {
+ 259   2          global.work.wifiStateUpdateFlag = false;
+ 260   2          global.device.wifi = global.set.wifiConnectState;
+ 261   2        }
+ 262   1        //更新 照明 状态
+ 263   1        if(global.work.lightSateUpdateFlag == true)
+ 264   1        {
+ 265   2          global.work.lightSateUpdateFlag = false;
+ 266   2          global.device.light = global.set.light;
+ 267   2        }
+ 268   1        //更新 浇水 状态
+ 269   1        if(global.work.waterSateUpdateFlag == true)
+ 270   1        {
+ 271   2          global.work.waterSateUpdateFlag = false;
+ 272   2          global.device.water = global.set.water;
+ 273   2        }
+ 274   1        //更新 缺水 状态
+ 275   1        if(global.work.nowaterSateUpdateFlag == true)
+ 276   1        {
+ 277   2          global.work.nowaterSateUpdateFlag = false;
+ 278   2          global.device.noWater = global.set.noWater;
+ 279   2        }
+ 280   1      }
+ 281          
+ 282          //
+ 283          // 向 wifi 发送一键配置命令
+ 284          //
+ 285          void configWifi(void)
+ 286          {
+ 287   1        global.uart.sendBuff[0] = 0xAA; //起始标志
+ 288   1        global.uart.sendBuff[1] = 11; //长度
+ 289   1      
+ 290   1        global.uart.sendBuff[2] = 0x10; //包描述高字节
+ 291   1        global.uart.sendBuff[3] = 0x00; //包描述低字节
+ 292   1        global.uart.sendBuff[4] = 0x10; //消息类型高字节
+ 293   1        global.uart.sendBuff[5] = 0x01; //消息类型低字节
+ 294   1      
+ 295   1        global.uart.sendBuff[6] = 0x11;
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 6   
+
+ 296   1        global.uart.sendBuff[7] = 0x22;
+ 297   1        global.uart.sendBuff[8] = 0x33;
+ 298   1        global.uart.sendBuff[9] = 0x44;
+ 299   1        global.uart.sendBuff[10] = figureSum0(global.uart.sendBuff,global.uart.sendBuff[1]-1);  //计算校验和
+ 300   1      
+ 301   1        uart0_sendData(global.uart.sendBuff,global.uart.sendBuff[1]); //发送
+ 302   1      }
+ 303          
+ 304          //
+ 305          //向 wifi 发送设备状态
+ 306          //
+ 307          void sendDeviceStateToWifi(void)
+ 308          {
+ 309   1        global.uart.sendBuff[0] = 0xAA; //起始标志
+ 310   1        global.uart.sendBuff[1] = 20; //长度
+ 311   1      
+ 312   1        global.uart.sendBuff[2] = 0x10; //包描述高字节
+ 313   1        global.uart.sendBuff[3] = 0x00; //包描述低字节
+ 314   1        global.uart.sendBuff[4] = 0x28; //消息类型高字节
+ 315   1        global.uart.sendBuff[5] = 0x01; //消息类型低字节
+ 316   1      
+ 317   1        global.uart.sendBuff[6] = global.time.year; //rtc年调整
+ 318   1        global.uart.sendBuff[7] = global.time.month;  //rtc月调整
+ 319   1        global.uart.sendBuff[8] = global.time.day;  //rtc日调整
+ 320   1        global.uart.sendBuff[9] = global.time.hour; //rtc时调整
+ 321   1        global.uart.sendBuff[10] = global.time.minute;  //rtc分调整
+ 322   1        global.uart.sendBuff[11] = global.time.sec; //rtc秒调整
+ 323   1      
+ 324   1        global.uart.sendBuff[12] = global.device.temperature>>8;
+ 325   1        global.uart.sendBuff[13] = global.device.temperature&0xff;
+ 326   1        global.uart.sendBuff[14] = global.device.water; //浇水状态
+ 327   1        global.uart.sendBuff[15] = global.device.light; //照明状态
+ 328   1        global.uart.sendBuff[16] = global.device.noWater; //缺水状态
+ 329   1      
+ 330   1        global.uart.sendBuff[17] = 0x01;  //版本信息高字节
+ 331   1        global.uart.sendBuff[18] = 0x01;  //版本信息低字节
+ 332   1        global.uart.sendBuff[19] = figureSum0(global.uart.sendBuff,global.uart.sendBuff[1]-1);  //计算校验和
+ 333   1      
+ 334   1        uart0_sendData(global.uart.sendBuff,global.uart.sendBuff[1]); //发送
+ 335   1      }
+ 336          
+ 337          //
+ 338          //向 wifi 发送来自 Top 的设置请求
+ 339          //
+ 340          void topRequestForSet(void)
+ 341          {
+ 342   1        global.uart.sendBuff[0] = 0xAA; //起始标志
+ 343   1        global.uart.sendBuff[1] = 24; //长度
+ 344   1      
+ 345   1        global.uart.sendBuff[2] = 0x10; //包描述高字节
+ 346   1        global.uart.sendBuff[3] = 0x00; //包描述低字节
+ 347   1        global.uart.sendBuff[4] = 0x10; //消息类型高字节
+ 348   1        global.uart.sendBuff[5] = 0x03; //消息类型低字节
+ 349   1      
+ 350   1        if(global.set.setTimeDataFlag == true)
+ 351   1        {
+ 352   2          global.uart.sendBuff[6] = global.set.startLightHour;  //照明启动小时调整--0xFF即不做调整
+ 353   2          global.uart.sendBuff[7] = global.set.startLightMinute;  //照明启动分钟调整
+ 354   2          global.uart.sendBuff[8] = global.set.keepLightHour; //照明持续小时调整
+ 355   2          global.uart.sendBuff[9] = global.set.keepLightMinute; //照明持续分钟调整
+ 356   2          global.uart.sendBuff[10] = global.set.startWaterHour; //浇水启动小时调整
+ 357   2          global.uart.sendBuff[11] = global.set.startWaterMinute; //浇水启动分钟调整
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 7   
+
+ 358   2          global.uart.sendBuff[12] = global.set.keepWaterHour;  //浇水持续小时调整
+ 359   2          global.uart.sendBuff[13] = global.set.keepWaterMinute;  //浇水持续分钟调整
+ 360   2          global.uart.sendBuff[14] = global.set.waterCycleDay;  //浇水周期时间调整
+ 361   2          global.set.setTimeDataFlag = false;
+ 362   2        }
+ 363   1        else
+ 364   1        {
+ 365   2          global.uart.sendBuff[6] = 0xff;//global.set.startLightHour; //照明启动小时调整--0xFF即不做调
+             -整
+ 366   2          global.uart.sendBuff[7] = 0xff;//global.set.startLightMinute; //照明启动分钟调整
+ 367   2          global.uart.sendBuff[8] = 0xff;//global.set.keepLightHour;  //照明持续小时调整
+ 368   2          global.uart.sendBuff[9] = 0xff;//global.set.keepLightMinute;  //照明持续分钟调整
+ 369   2          global.uart.sendBuff[10] = 0xff;//global.set.startWaterHour;  //浇水启动小时调整
+ 370   2          global.uart.sendBuff[11] = 0xff;//global.set.startWaterMinute;  //浇水启动分钟调整
+ 371   2          global.uart.sendBuff[12] = 0xff;//global.set.keepWaterHour; //浇水持续小时调整
+ 372   2          global.uart.sendBuff[13] = 0xff;//global.set.keepWaterMinute; //浇水持续分钟调整
+ 373   2          global.uart.sendBuff[14] = 0xff;//global.set.waterCycleDay; //浇水周期时间调整
+ 374   2        }
+ 375   1      
+ 376   1        global.uart.sendBuff[15] = global.set.light;  //请求照明设置
+ 377   1        global.uart.sendBuff[16] = global.set.water;  //请求浇水设置
+ 378   1      
+ 379   1        global.uart.sendBuff[17] = 0xff;//global.set.year;  //年调整
+ 380   1        global.uart.sendBuff[18] = 0xff;//global.set.month; //月调整
+ 381   1        global.uart.sendBuff[19] = 0xff;//global.set.day; //日调整
+ 382   1        if(global.set.setRtcTimeDataFlag == true)
+ 383   1        {
+ 384   2          global.uart.sendBuff[20] = global.set.hour; //时调整
+ 385   2          global.uart.sendBuff[21] = global.set.minute; //分调整
+ 386   2          global.uart.sendBuff[22] = 0;//global.set.sec;  //秒调整
+ 387   2          global.set.setRtcTimeDataFlag = false;
+ 388   2        }
+ 389   1        else
+ 390   1        {
+ 391   2          global.uart.sendBuff[20] = 0xff;//global.set.hour;  //时调整
+ 392   2          global.uart.sendBuff[21] = 0xff;//global.set.minute;  //分调整
+ 393   2          global.uart.sendBuff[22] = 0xff;//global.set.sec; //秒调整
+ 394   2        }
+ 395   1      
+ 396   1        global.uart.sendBuff[23] = figureSum0(global.uart.sendBuff,global.uart.sendBuff[1]-1);  //计算校验和
+ 397   1      
+ 398   1        uart0_sendData(global.uart.sendBuff,global.uart.sendBuff[1]); //发送
+ 399   1      }
+ 400          
+ 401          //
+ 402          //向 顶板 发送设备状态
+ 403          //
+ 404          void sendDeviceStateToTop(void)
+ 405          {
+ 406   1        global.iouart.sendBuff[0] = 0x96; //头
+ 407   1        global.iouart.sendBuff[1] = 18; //长度
+ 408   1        global.iouart.sendBuff[2] = 0x00; //消息类型高8位
+ 409   1        global.iouart.sendBuff[3] = 0x02; //消息类型d低8位
+ 410   1        global.iouart.sendBuff[4] = global.device.wifi;
+ 411   1        global.iouart.sendBuff[5] = 0x00;
+ 412   1        global.iouart.sendBuff[6] = global.device.light;
+ 413   1        global.iouart.sendBuff[7] = global.device.water;
+ 414   1        global.iouart.sendBuff[8] = global.device.noWater;
+ 415   1        global.iouart.sendBuff[9] = global.device.nextStartLightCountDown>>8;
+ 416   1        global.iouart.sendBuff[10] = global.device.nextStartLightCountDown&0x00ff;
+ 417   1        global.iouart.sendBuff[11] = global.device.endLightCountDown>>8;
+ 418   1        global.iouart.sendBuff[12] = global.device.endLightCountDown&0x00ff;
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 8   
+
+ 419   1        global.iouart.sendBuff[13] = global.device.nextStartWaterCountDown>>8;
+ 420   1        global.iouart.sendBuff[14] = global.device.nextStartWaterCountDown&0x00ff;
+ 421   1        global.iouart.sendBuff[15] = global.device.endWaterCountDown>>8;
+ 422   1        global.iouart.sendBuff[16] = global.device.endWaterCountDown&0x00ff;
+ 423   1        global.iouart.sendBuff[17] = figureSum(global.iouart.sendBuff,global.iouart.sendBuff[1]-1);
+ 424   1      
+ 425   1        oneWire_write(global.iouart.sendBuff,global.iouart.sendBuff[1]);
+ 426   1      }
+ 427          
+ 428          //
+ 429          //向 顶板 发送设置数据
+ 430          //
+ 431          void sendSetDataToTop(void)
+ 432          {
+ 433   1        global.iouart.sendBuff[0] = 0x96; //头
+ 434   1        global.iouart.sendBuff[1] = 16; //长度
+ 435   1        global.iouart.sendBuff[2] = 0x00; //消息类型高8位
+ 436   1        global.iouart.sendBuff[3] = 0x04; //消息类型d低8位
+ 437   1        global.iouart.sendBuff[4] = global.time.hour;
+ 438   1        global.iouart.sendBuff[5] = global.time.minute;
+ 439   1        global.iouart.sendBuff[6] = global.set.startLightHour;
+ 440   1        global.iouart.sendBuff[7] = global.set.startLightMinute;
+ 441   1        global.iouart.sendBuff[8] = global.set.keepLightHour;
+ 442   1        global.iouart.sendBuff[9] = global.set.keepLightMinute;
+ 443   1        global.iouart.sendBuff[10] = global.set.startWaterHour;
+ 444   1        global.iouart.sendBuff[11] = global.set.startWaterMinute;
+ 445   1        global.iouart.sendBuff[12] = global.set.keepWaterHour;
+ 446   1        global.iouart.sendBuff[13] = global.set.keepWaterMinute;
+ 447   1        global.iouart.sendBuff[14] = global.set.waterCycleDay;
+ 448   1        global.iouart.sendBuff[15] = figureSum(global.iouart.sendBuff,global.iouart.sendBuff[1]-1);
+ 449   1      
+ 450   1        oneWire_write(global.iouart.sendBuff,global.iouart.sendBuff[1]);
+ 451   1      }
+ 452          
+ 453          //
+ 454          //向 顶板 发送响应
+ 455          //
+ 456          void sendAckToTop(void)
+ 457          {
+ 458   1        global.iouart.sendBuff[0] = 0x96; //头
+ 459   1        global.iouart.sendBuff[1] = 5;  //长度
+ 460   1        global.iouart.sendBuff[2] = 0x00; //消息类型高8位
+ 461   1        global.iouart.sendBuff[3] = 0x07; //消息类型d低8位
+ 462   1        global.iouart.sendBuff[4] = figureSum(global.iouart.sendBuff,global.iouart.sendBuff[1]-1);
+ 463   1      
+ 464   1        oneWire_write(global.iouart.sendBuff,global.iouart.sendBuff[1]);
+ 465   1      }
+ 466          
+ 467          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 468          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 469          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 470          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 471          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 472          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 473          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 9   
+
+ 474          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 475          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 476          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 477          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 478          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 479          //////////////////////////////////////////////////////////////////////////////////////////////////////////
+             -//////////////////////////////////////////////////////////////////////////
+ 480          
+ 481          unsigned char isNoWater(void)
+ 482          {
+ 483   1        NOWATER_INIT;
+ 484   1        if(IS_NOWATER == 0)
+ 485   1        {
+ 486   2          return true;
+ 487   2        }
+ 488   1      
+ 489   1        return false;
+ 490   1      }
+ 491          
+ 492          void parseDataFromTop(void)
+ 493          {
+ 494   1        unsigned char len = 0,sum = 0;
+ 495   1        unsigned char buff[32] = {0};
+ 496   1        unsigned int cmd = 0;
+ 497   1        len = oneWire_read(buff);
+ 498   1        if(len != 0)  //大于0则说明有数据包
+ 499   1        {
+ 500   2          sum = figureSum(buff,len-1);
+ 501   2          if(buff[0] == 0x96 && buff[len-1] == sum) //确认包头和校验
+ 502   2          {
+ 503   3            cmd = buff[2]<<8 | buff[3];
+ 504   3            switch(cmd)
+ 505   3            {
+ 506   4              case 0x0001:  //设备状态获取请求  //顶板索要设备状态数据，并给出当前温度
+ 507   4              {
+ 508   5                global.device.temperature = buff[4]<<8 | buff[5]; //拿到温度
+ 509   5                global.device.getStateFlag = true;  //标记获取状态标志，将要发送设备状态给顶板
+ 510   5              }break;
+ 511   4              case 0x0003:  //设置参数获取请求
+ 512   4              {
+ 513   5                global.set.getDataFlag = true;
+ 514   5              }break;
+ 515   4              case 0x0005:  //设备状态设置请求，按下照明或浇水或连wifi
+ 516   4              {
+ 517   5                global.work.keyDo = buff[4];
+ 518   5                global.work.serventSetDevieSateFlag = true; //判断键值，并且发送给模块决断
+ 519   5              }break;
+ 520   4              case 0x0006:  //设置参数设置请求
+ 521   4              {
+ 522   5                if(buff[4] != 0xff)
+ 523   5                {
+ 524   6                  global.set.setRtcTimeDataFlag = true; //设置了rtc时间
+ 525   6                  global.set.hour = buff[4];
+ 526   6                  global.set.minute = buff[5];
+ 527   6                  global.set.sec = 0;
+ 528   6                }
+ 529   5                else global.set.setRtcTimeDataFlag = false;
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 10  
+
+ 530   5                if(buff[6] != 0xff) global.set.setTimeDataFlag = true;  //设置了照明浇水的时间
+ 531   5                global.set.startLightHour = buff[6];
+ 532   5                global.set.startLightMinute = buff[7];
+ 533   5                global.set.keepLightHour = buff[8];
+ 534   5                global.set.keepLightMinute = buff[9];
+ 535   5                global.set.startWaterHour = buff[10];
+ 536   5                global.set.startWaterMinute = buff[11];
+ 537   5                global.set.keepWaterHour = buff[12];
+ 538   5                global.set.keepWaterMinute = buff[13];
+ 539   5                global.set.waterCycleDay = buff[14];
+ 540   5      
+ 541   5                global.set.setDatFlag = true;
+ 542   5              }break;
+ 543   4            }
+ 544   3          }
+ 545   2        }
+ 546   1      }
+ 547          
+ 548          /////////////////////////////////////////////////单总线通信//////////////////////////////////////////
+             -//////////////
+ 549          
+ 550          #define ONE_WIRE_A P03
+ 551          #define ONE_WIRE_A_MODE P03_Quasi_Mode
+ 552          #define ONE_WIRE_A_H set_P03
+ 553          #define ONE_WIRE_A_L clr_P03
+ 554          #define ONE_WIRE_B P04
+ 555          #define ONE_WIRE_B_MODE P04_Quasi_Mode
+ 556          #define ONE_WIRE_B_H set_P04
+ 557          #define ONE_WIRE_B_L clr_P04
+ 558          
+ 559          #define ONE_WIRE_READ ONE_WIRE_B
+ 560          #define ONE_WIRE_WRITE(b) if(b) ONE_WIRE_A_H; else ONE_WIRE_A_L
+ 561          
+ 562          void OneWire_init(void)
+ 563          {
+ 564   1        ONE_WIRE_A_MODE;
+ 565   1        ONE_WIRE_B_MODE;
+ 566   1      
+ 567   1        ONE_WIRE_WRITE(1);  //拉高以释放写总线
+ 568   1      }
+ 569          
+ 570          void oneWire_start(void)
+ 571          {
+ 572   1        ONE_WIRE_WRITE(0);  //拉低写总线作为起始信号
+ 573   1        Timer0_Delay1ms(10);
+ 574   1      }
+ 575          
+ 576          void oneWire_stop(void)
+ 577          {
+ 578   1        ONE_WIRE_WRITE(1);  //拉高以释放写总线作为停止信号
+ 579   1      }
+ 580          
+ 581          //
+ 582          //  写一个字节八位数据
+ 583          //
+ 584          void oneWire_writeByte(unsigned char dat)
+ 585          {
+ 586   1        unsigned char i = 8;
+ 587   1      
+ 588   1        while(i--)
+ 589   1        {
+ 590   2          ONE_WIRE_WRITE(1);  //拉高写总线传输一位数据
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 11  
+
+ 591   2          if(dat & 0x80)
+ 592   2            Timer0_Delay100us(5); //写高电平
+ 593   2          else
+ 594   2            Timer0_Delay100us(2); //写低电平
+ 595   2          dat <<= 1;
+ 596   2          ONE_WIRE_WRITE(0);  //拉低写总线作为位之间的间隔
+ 597   2          Timer0_Delay100us(2);
+ 598   2        }
+ 599   1      }
+ 600          
+ 601          //
+ 602          //  写数据包，通信规则中，起始信号后的第一个字节必须为数据包的长度(该字节
+             -不计算在长度内)
+ 603          //
+ 604          void oneWire_write(unsigned char* buff,unsigned char len)
+ 605          {
+ 606   1        oneWire_start();  //起始信号
+ 607   1        oneWire_writeByte(len); //发送数据长度
+ 608   1        while(len--)  //数据包长度
+ 609   1        {
+ 610   2          oneWire_writeByte(*buff); //发送一个字节的数据
+ 611   2          if(len != 0) ++buff;  //防止溢出
+ 612   2        }
+ 613   1        oneWire_stop(); //停止信号
+ 614   1      }
+ 615          
+ 616          //
+ 617          //  读数据包，成功后返回数据包长度,失败为0
+ 618          //
+ 619          unsigned char oneWire_read(unsigned char* buff)
+ 620          {
+ 621   1        unsigned int timeOut = 0;
+ 622   1        unsigned char count = 0,dat = 0,transFlag = 0,index = 0,lenFlag = 0,lenCount = 0,len = 0;
+ 623   1        if(!ONE_WIRE_READ)  //低电平，收到起始信号
+ 624   1        {
+ 625   2          while(1)
+ 626   2          {
+ 627   3            if(ONE_WIRE_READ) //高电平，计算持续时间
+ 628   3            {
+ 629   4              ++count;  //记录高电平持续时间
+ 630   4              transFlag = 1;  //电平跳变标志
+ 631   4            }
+ 632   3            else if(!ONE_WIRE_READ && transFlag == 1) //读总线为低电平并且只有在电平跳变后才进�
+             -�
+ 633   3            { //一位数据结束，判断之前的高电平传输的是1还是0
+ 634   4              dat <<= 1;
+ 635   4              if(count > 3) //大于300us就算高电平
+ 636   4                dat |= 1;
+ 637   4              count = 0;  //清高电平计数
+ 638   4              timeOut = 0;  //清超时计数
+ 639   4              transFlag = 0;  //清电平跳变标志
+ 640   4              if(++index == 8)  //每读八位，即一个字节进入一次
+ 641   4              {
+ 642   5                if(lenFlag == 0)  //起始信号后的第一个字节，用于说明数据包的长度
+ 643   5                {
+ 644   6                  lenFlag = 1;  //已接收到长度
+ 645   6                  len = dat;
+ 646   6                }
+ 647   5                else  //数据包的内容
+ 648   5                {
+ 649   6                  *buff = dat;
+ 650   6                  if(++lenCount == len) //数据包接收完成
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 12  
+
+ 651   6                  {
+ 652   7                    Timer0_Delay100us(3); //等低电平过去，以防止连续传输时错误的将用作间隔的低
+             -电平识别为起始信号
+ 653   7                    return len; //结束,并返回长度
+ 654   7                  }
+ 655   6                  else  //没接收完成就继续接收，这里单独自增是为了防止溢出
+ 656   6                  {
+ 657   7                    ++buff;
+ 658   7                  }
+ 659   6                  
+ 660   6                }
+ 661   5                index = 0;  //清计数
+ 662   5                dat = 0x00; //清变量
+ 663   5              }
+ 664   4            }
+ 665   3            Timer0_Delay100us(1); //超时处理
+ 666   3            if(++timeOut > 200) return 0; //超时
+ 667   3          }
+ 668   2        }
+ 669   1        return 0;
+ 670   1      }
+ 671          
+ 672          //
+ 673          //和校验计算
+ 674          //unsigned char len : 需要计算的长度
+ 675          //
+ 676          unsigned char figureSum(unsigned char* buff,unsigned char len)
+ 677          {
+ 678   1        unsigned char sum = 0;
+ 679   1      
+ 680   1        while(len--)
+ 681   1        {
+ 682   2          sum += *buff;
+ 683   2          if(len != 0) ++buff;  //防止溢出
+ 684   2        }
+ 685   1        return sum;
+ 686   1      }
+ 687          
+ 688          ///////////////////////////////////////////////串口0功能//////////////////////////////////////////////
+             -////////
+ 689          
+ 690          void uart0_fun(unsigned char* buff);  //声明
+ 691          //
+ 692          //  处理数据
+ 693          //
+ 694          void parseDataFromWifi(void)
+ 695          {
+ 696   1        unsigned char sum = 0;
+ 697   1        if(global.uart.recvCmdCount > 0)  //有待处理的指令
+ 698   1        {
+ 699   2          if(global.uart.recvCmdCount > UARTBUFFCMDMAXSIZE - 1) //如果待处理的指令过多，大于上限-1(
+             -因为正在接收的指令会占用一条，所以要-1)
+ 700   2          {
+ 701   3            //因为待处理过多了，所以缓冲区中每一条都被占用了，所以处理当前在接收�
+             -�下标的+2，之所以不是+1是为了防止还在处理+1时，当前的下标就接收完了接着又开始接收+1
+             -导致数据错乱
+ 702   3            //例如当前在接收的下标是0，那么如果处理1时，还未处理完1就接收完0了，接�
+             -��又开始接收1，那么就会导致错乱
+ 703   3            if(global.uart.recvCmdNowIndex + 2 > UARTBUFFCMDMAXSIZE - 1)  //如果下标+2会超过最大下标，�
+             -�计算下标
+ 704   3            {
+ 705   4              global.uart.recvCmdIndex = 2 - (UARTBUFFCMDMAXSIZE - 1 - global.uart.recvCmdNowIndex);  //超出多少�
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 13  
+
+             -��从0加上多少，最多加2
+ 706   4            }
+ 707   3            else
+ 708   3            {
+ 709   4              global.uart.recvCmdIndex = global.uart.recvCmdNowIndex + 2;
+ 710   4            }
+ 711   3          }
+ 712   2          else  //待处理的指令不多,则直接处理当前接收的上一条
+ 713   2          {
+ 714   3            if(global.uart.recvCmdNowIndex == 0)
+ 715   3            {
+ 716   4              global.uart.recvCmdIndex = UARTBUFFCMDMAXSIZE - 1;
+ 717   4            }
+ 718   3            else
+ 719   3            {
+ 720   4              global.uart.recvCmdIndex = global.uart.recvCmdNowIndex - 1;
+ 721   4            }
+ 722   3          }
+ 723   2          
+ 724   2          //处理指令
+ 725   2          sum = figureSum0(global.uart.recvDealBuff[global.uart.recvCmdIndex],global.uart.recvDealBuff[global.uart
+             -.recvCmdIndex][1]-1);
+ 726   2          if(sum == global.uart.recvDealBuff[global.uart.recvCmdIndex][global.uart.recvDealBuff[global.uart.recvCm
+             -dIndex][1]-1])  //校验通过
+ 727   2          {
+ 728   3            global.uart.recvDataTimeOutClear = true;  //开启清理标志，防止清理时被中断修改
+ 729   3            global.uart.recvDataTimeOutMs = 0;
+ 730   3            global.uart.recvDataTimeOutSec = 0;
+ 731   3            global.uart.recvDataTimeOutMinute = 0;
+ 732   3            global.uart.recvDataTimeOutClear = false; //关闭清理标志，让中断继续计时
+ 733   3            uart0_fun(global.uart.recvDealBuff[global.uart.recvCmdIndex]);  //功能判断
+ 734   3          }
+ 735   2          --global.uart.recvCmdCount; //待处理指令-1
+ 736   2        }
+ 737   1      }
+ 738          
+ 739          //
+ 740          //和校验计算
+ 741          //unsigned char len : 需要计算的长度
+ 742          //
+ 743          unsigned char figureSum0(unsigned char* buff,unsigned char len)
+ 744          {
+ 745   1        unsigned char sum = 0;
+ 746   1      
+ 747   1        while(len--)
+ 748   1        {
+ 749   2          sum += *buff;
+ 750   2          if(len != 0) ++buff;  //防止溢出
+ 751   2        }
+ 752   1        sum = ~sum;
+ 753   1        sum += 1;
+ 754   1        return sum;
+ 755   1      }
+ 756          
+ 757          void uart0_fun(unsigned char* buff)
+ 758          {
+ 759   1        unsigned int messageType = 0,temp = 0;
+ 760   1        messageType = (buff[4]<<8) | buff[5];
+ 761   1        switch(messageType)
+ 762   1        {
+ 763   2          case 0x1801:  //一键配置响应
+ 764   2          {
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 14  
+
+ 765   3            
+ 766   3          }break;
+ 767   2          case 0x1803:  //设置参数响应
+ 768   2          {
+ 769   3            
+ 770   3          }break;
+ 771   2          case 0x1002:  //网络状态
+ 772   2          {
+ 773   3            if(buff[7] == 0x00) global.set.wifiConnectState = connectToAp;  //连接路由
+ 774   3            else if(buff[7] == 0x01 && buff[8] == 0x00) global.set.wifiConnectState = connectToService; //连接至
+             -路由
+ 775   3            else if(buff[8] == 0x01)  global.set.wifiConnectState = online; //连接至服务器
+ 776   3      
+ 777   3            global.work.wifiStateUpdateFlag = true; //置位 wifi 状态更新标志
+ 778   3          }break;
+ 779   2          case 0x2001:  //WIFI模块请求设备状态并给时间
+ 780   2          {
+ 781   3            if(buff[6] != 0xff)
+ 782   3            {
+ 783   4              global.set.year = buff[6];// + 2000;
+ 784   4            }
+ 785   3            if(buff[7] != 0xff)
+ 786   3            {
+ 787   4              global.set.month = buff[7];
+ 788   4            }
+ 789   3            if(buff[8] != 0xff)
+ 790   3            {
+ 791   4              global.set.day = buff[8];
+ 792   4            }
+ 793   3            if(buff[9] != 0xff)
+ 794   3            {
+ 795   4              global.set.hour = buff[9];
+ 796   4            }
+ 797   3            if(buff[10] != 0xff)
+ 798   3            {
+ 799   4              global.set.minute = buff[10];
+ 800   4            }
+ 801   3            if(buff[11] != 0xff)
+ 802   3            {
+ 803   4              global.set.sec = buff[11];
+ 804   4            }
+ 805   3            global.work.wifiGetDeviceFlag = true;
+ 806   3          }break;
+ 807   2          case 0x2002:  //WIFI模块请求设置设备
+ 808   2          {
+ 809   3            if(buff[6] == 0x00) global.set.water = false;
+ 810   3            else if(buff[6] == 0x01) global.set.water = true;
+ 811   3            if(buff[7] == 0x00) global.set.light = false;
+ 812   3            else if(buff[7] == 0x01) global.set.light = true;
+ 813   3      
+ 814   3            temp = (buff[8]<<8) | buff[9];
+ 815   3            global.device.nextStartWaterCountDown = temp;
+ 816   3            //因为底板与顶板交互显示倒计时的机制，所以不再判断
+ 817   3            // if(temp != 0xffff)
+ 818   3            // {
+ 819   3            //  global.device.nextStartWaterCountDown = temp;
+ 820   3            // }
+ 821   3            temp = (buff[10]<<8) | buff[11];
+ 822   3            global.device.endWaterCountDown = temp;
+ 823   3            // if(temp != 0xffff)
+ 824   3            // {
+ 825   3            //  global.device.endWaterCountDown = temp;
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 15  
+
+ 826   3            // }
+ 827   3            temp = (buff[12]<<8) | buff[13];
+ 828   3            global.device.nextStartLightCountDown = temp;
+ 829   3            // if(temp != 0xffff)
+ 830   3            // {
+ 831   3            //  global.device.nextStartLightCountDown = temp;
+ 832   3            // }
+ 833   3            temp = (buff[14]<<8) | buff[15];
+ 834   3            global.device.endLightCountDown = temp;
+ 835   3            // if(temp != 0xffff)
+ 836   3            // {
+ 837   3            //  global.device.endLightCountDown = temp;
+ 838   3            // }
+ 839   3      
+ 840   3            if(buff[16] != 0xff)
+ 841   3            {
+ 842   4              global.set.startLightHour = buff[16];
+ 843   4            }
+ 844   3            if(buff[17] != 0xff)
+ 845   3            {
+ 846   4              global.set.startLightMinute = buff[17];
+ 847   4            }
+ 848   3            if(buff[18] != 0xff)
+ 849   3            {
+ 850   4              global.set.keepLightHour = buff[18];
+ 851   4            }
+ 852   3            if(buff[19] != 0xff)
+ 853   3            {
+ 854   4              global.set.keepLightMinute = buff[19];
+ 855   4            }
+ 856   3            if(buff[20] != 0xff)
+ 857   3            {
+ 858   4              global.set.startWaterHour = buff[20];
+ 859   4            }
+ 860   3            if(buff[21] != 0xff)
+ 861   3            {
+ 862   4              global.set.startWaterMinute = buff[21];
+ 863   4            }
+ 864   3            if(buff[22] != 0xff)
+ 865   3            {
+ 866   4              global.set.keepWaterHour = buff[22];
+ 867   4            }
+ 868   3            if(buff[23] != 0xff)
+ 869   3            {
+ 870   4              global.set.keepWaterMinute = buff[23];
+ 871   4            }
+ 872   3            if(buff[24] != 0xff)
+ 873   3            {
+ 874   4              global.set.waterCycleDay = buff[24];
+ 875   4            }
+ 876   3      
+ 877   3            global.work.wifiSetDeviceFlag = true;
+ 878   3          }break;
+ 879   2        }
+ 880   1      }
+ 881          
+ 882          void uart0_isr(unsigned char dat)
+ 883          {
+ 884   1        unsigned char sum = 0,i = 0;
+ 885   1        
+ 886   1        //超时处理
+ 887   1        if(global.uart.recTimeOutCount == 1000)
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 16  
+
+ 888   1        {
+ 889   2          global.uart.recTimeOutCount = 0;  //已超时，关掉超时计时
+ 890   2          global.uart.nowIndex = 0; //重置下标
+ 891   2        }
+ 892   1        
+ 893   1        //判断接收的数据是否符合通信格式
+ 894   1        if(global.uart.nowIndex == 0 && dat == 0xAA)  //头
+ 895   1        {
+ 896   2          global.uart.recTimeOutCount = 1;  //开启超时计时，为1则计时，如果超时，则放弃当前�
+             -�据包，收到数据包则刷新
+ 897   2          global.uart.recvDealBuff[global.uart.recvCmdNowIndex][global.uart.nowIndex] = dat;
+ 898   2          ++global.uart.nowIndex;
+ 899   2        }
+ 900   1        else if(global.uart.nowIndex == 1)  //数据长度
+ 901   1        {
+ 902   2          if(dat > UARTBUFFDATAMAXSIZE - 14)  //长度大于缓冲区最大-14，则退出程序，防止溢出
+ 903   2          {
+ 904   3            global.uart.nowIndex = 0;
+ 905   3            return;
+ 906   3          }
+ 907   2          global.uart.recvDealBuff[global.uart.recvCmdNowIndex][global.uart.nowIndex] = dat;  //长度：从头到�
+             -��验
+ 908   2          ++global.uart.nowIndex;
+ 909   2        }
+ 910   1        else if(global.uart.nowIndex >= 2 && global.uart.nowIndex <= global.uart.recvDealBuff[global.uart.recvCmd
+             -NowIndex][1]-2) //减去了校验字节，因为下标比实际长度小1，所以-2
+ 911   1        {
+ 912   2          global.uart.recvDealBuff[global.uart.recvCmdNowIndex][global.uart.nowIndex] = dat;  //数据
+ 913   2          ++global.uart.nowIndex;
+ 914   2        }
+ 915   1        else if(global.uart.nowIndex == global.uart.recvDealBuff[global.uart.recvCmdNowIndex][1]-1) //记录收�
+             -�的指令，之后在主循环中处理，处理时再做校验
+ 916   1        {
+ 917   2          global.uart.recTimeOutCount = 0;  //接收到一个可能完整的数据包，关掉超时计时，为0�
+             -�不计时
+ 918   2          global.uart.recvDealBuff[global.uart.recvCmdNowIndex][global.uart.nowIndex] = dat;  //数据
+ 919   2      
+ 920   2          ++global.uart.recvCmdCount; //对接收到的指令进行计数
+ 921   2          if(global.uart.recvCmdNowIndex == UARTBUFFCMDMAXSIZE - 1) //接收的指令数量已经达到上限，�
+             -�为用作数组下标所以这里需要减1
+ 922   2          {
+ 923   3            global.uart.recvCmdNowIndex = 0;  //重置或者也有可能会造成覆盖
+ 924   3          }
+ 925   2          else
+ 926   2          {
+ 927   3            ++global.uart.recvCmdNowIndex;
+ 928   3          }
+ 929   2      
+ 930   2          global.uart.nowIndex = 0;
+ 931   2        }
+ 932   1      }
+ 933          
+ 934          void delay(unsigned int a)
+ 935          {
+ 936   1        unsigned int b = 0;
+ 937   1        for(;a > 0;a--)
+ 938   1        {
+ 939   2          for(;b < 100;b++);
+ 940   2        }
+ 941   1      }
+ 942          
+ 943          void uart0_sendData(unsigned char* buff,unsigned char len)
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 17  
+
+ 944          {
+ 945   1        while(len--)
+ 946   1        {
+ 947   2          //因为下面的阻塞等待，所以该变量不会存在同时在中断和函数调用时同时被修
+             -改的情况
+ 948   2          global.uart.sendIsrFlag = false;  //发送完成会在中断中被置位
+ 949   2          SBUF = *buff;
+ 950   2          //这里存在可能导致死机的问题，当发送后被某中断打断
+ 951   2          //在回到这里之前，串口已经发送完成，中断中 TI 被清 0
+ 952   2          //导致回到这里之后，无法跳出循环
+ 953   2            // while(TI==0);
+ 954   2          //这里使用额外的变量标记串口发送完成标志
+ 955   2          //当上述的情况发生之后，该标志依然正常被置位
+ 956   2          while(global.uart.sendIsrFlag == false);  //未被置位就阻塞等待
+ 957   2          delay(20);
+ 958   2          if(len != 0) ++buff;  //防止溢出
+ 959   2        }
+ 960   1      }
+ 961          
+ 962          ///////////////////////////////////////////////RTC//////////////////////////////////////////////////////
+ 963          
+ 964          #define RTC_RST_H set_P01
+ 965          #define RTC_RST_L clr_P01
+ 966          #define RTC_SCL_H set_P13
+ 967          #define RTC_SCL_L clr_P13
+ 968          #define RTC_SDA_H set_P14
+ 969          #define RTC_SDA_L clr_P14
+ 970          #define RTC_SDA P14
+ 971          
+ 972          #define RTCADDR_SEC 0x80
+ 973          #define RTCADDR_MINUTE 0x82
+ 974          #define RTCADDR_HOUR 0x84
+ 975          #define RTCADDR_DAY 0x86
+ 976          #define RTCADDR_MONTH 0x88
+ 977          #define RTCADDR_YEAR 0x8c
+ 978          #define RTCADDR_WP 0x8e //写保护
+ 979          #define RTCADDR_CHARGER 0x90  //涓流充电
+ 980          
+ 981          #define RTC_WP_OPEN 0x80 //写保护开
+ 982          #define RTC_WP_CLOSE  0x00 //写保护关
+ 983          #define RTC_CHARGER_LEVEL4 0xa9 //
+ 984          #define RTC_CHARGER_LEVEL6 0xab //应该是最慢的充电
+ 985          
+ 986          void rctWriteByte(unsigned char addr,unsigned char dat);
+ 987          unsigned char rtcReadByte(unsigned char addr);
+ 988          
+ 989          void initRtc(void)
+ 990          {
+ 991   1        P01_PushPull_Mode;  //NRST
+ 992   1        P13_PushPull_Mode;  //SCL
+ 993   1        P14_PushPull_Mode;  //SDA
+ 994   1      
+ 995   1        RTC_RST_L;
+ 996   1        RTC_SCL_H;
+ 997   1        RTC_SDA_H;
+ 998   1      }
+ 999          
+1000          void firstInitRtc(void)
+1001          {
+1002   1        rctWriteByte(RTCADDR_WP,RTC_WP_CLOSE);  //关闭写保护
+1003   1        rctWriteByte(RTCADDR_SEC,0x00); //开启计时,秒清零
+1004   1        rctWriteByte(RTCADDR_HOUR,0x00);  //清零小时
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 18  
+
+1005   1        rctWriteByte(RTCADDR_MINUTE,0x00);  //清零分钟
+1006   1        rctWriteByte(RTCADDR_CHARGER,RTC_CHARGER_LEVEL4);
+1007   1        // rctWriteByte(RTCADDR_CHARGER,RTC_CHARGER_LEVEL6);  //设置涓流充电
+1008   1        rctWriteByte(RTCADDR_WP,RTC_WP_OPEN); //开启写保护
+1009   1      }
+1010          
+1011          void rctWriteByte(unsigned char addr,unsigned char dat)
+1012          {
+1013   1        unsigned char count;
+1014   1      
+1015   1        P14_PushPull_Mode;
+1016   1      
+1017   1        RTC_SCL_L;
+1018   1        RTC_RST_H;
+1019   1      
+1020   1        addr &= 0xfe;
+1021   1      
+1022   1        for(count = 0;count < 8;count++)
+1023   1        {
+1024   2          RTC_SCL_L;
+1025   2          if(addr & 0x01)
+1026   2          {
+1027   3            RTC_SDA_H;
+1028   3          }
+1029   2          else
+1030   2          {
+1031   3            RTC_SDA_L;
+1032   3          }
+1033   2          addr >>= 1;
+1034   2          RTC_SCL_H;
+1035   2        }
+1036   1      
+1037   1        for(count = 0;count < 8;count++)
+1038   1        {
+1039   2          RTC_SCL_L;
+1040   2          if(dat & 0x01)
+1041   2          {
+1042   3            RTC_SDA_H;
+1043   3          }
+1044   2          else
+1045   2          {
+1046   3            RTC_SDA_L;
+1047   3          }
+1048   2          dat >>= 1;
+1049   2          RTC_SCL_H;
+1050   2        }
+1051   1      
+1052   1        RTC_RST_L;
+1053   1      }
+1054          
+1055          unsigned char rtcReadByte(unsigned char addr)
+1056          {
+1057   1        unsigned char count,dat = 0;
+1058   1      
+1059   1        P14_PushPull_Mode;
+1060   1      
+1061   1        RTC_SCL_L;
+1062   1        RTC_RST_H;
+1063   1      
+1064   1        addr |= 0x01;
+1065   1      
+1066   1        for(count = 0;count < 8;count++)
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 19  
+
+1067   1        {
+1068   2          RTC_SCL_L;
+1069   2          if(addr & 0x01)
+1070   2          {
+1071   3            RTC_SDA_H;
+1072   3          }
+1073   2          else
+1074   2          {
+1075   3            RTC_SDA_L;
+1076   3          }
+1077   2          addr >>= 1;
+1078   2          RTC_SCL_H;
+1079   2        }
+1080   1      
+1081   1        P14_Input_Mode;
+1082   1      
+1083   1        for(count = 0;count < 8;count++)
+1084   1        {
+1085   2          RTC_SCL_H;
+1086   2          if(RTC_SDA)
+1087   2          {
+1088   3            dat |= 0x80;
+1089   3          }
+1090   2          RTC_SCL_L;  
+1091   2          dat >>= 1;
+1092   2        }
+1093   1        RTC_RST_L;
+1094   1      
+1095   1        return dat;
+1096   1      }
+1097          
+1098          void rtcGetTime(void)
+1099          {
+1100   1        unsigned char temp = 0;
+1101   1        temp = rtcReadByte(RTCADDR_YEAR);
+1102   1        global.time.year = ((temp>>4)*10) + (temp&0x0f);
+1103   1        temp = rtcReadByte(RTCADDR_MONTH);
+1104   1        global.time.month = ((temp>>4)*10) + (temp&0x0f);
+1105   1        temp = rtcReadByte(RTCADDR_DAY);
+1106   1        global.time.day = ((temp>>4)*10) + (temp&0x0f);
+1107   1        temp = rtcReadByte(RTCADDR_HOUR);
+1108   1        global.time.hour = ((temp>>4)*10) + (temp&0x0f);
+1109   1        temp = rtcReadByte(RTCADDR_MINUTE);
+1110   1        global.time.minute = ((temp>>4)*10) + (temp&0x0f);
+1111   1        temp = rtcReadByte(RTCADDR_SEC);
+1112   1        global.time.sec = ((temp>>4)*10) + (temp&0x0f);
+1113   1      }
+1114          
+1115          void rtcSetTime(void)
+1116          {
+1117   1        unsigned char temp = 0;
+1118   1        
+1119   1        //当年月日时分都相同且秒相差小于5秒则退出不设置，否则设置
+1120   1        if(global.set.year == global.time.year && global.set.month == global.time.month && global.set.day == glob
+             -al.time.day &&
+1121   1          global.set.hour == global.time.hour && global.set.minute == global.time.minute)
+1122   1        {
+1123   2          if(global.set.sec == global.time.sec)
+1124   2            return;
+1125   2          else if(global.set.sec > global.time.sec)
+1126   2            temp = global.set.sec - global.time.sec;
+1127   2          else if(global.set.sec < global.time.sec)
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 20  
+
+1128   2            temp = global.time.sec - global.set.sec;
+1129   2          if(temp < 5) return;
+1130   2        }
+1131   1      
+1132   1        rctWriteByte(RTCADDR_WP,RTC_WP_CLOSE);  //关闭写保护
+1133   1        temp = ((global.set.year/10)<<4) | (global.set.year%10);
+1134   1        rctWriteByte(RTCADDR_YEAR,temp);
+1135   1        temp = ((global.set.month/10)<<4) | (global.set.month%10);
+1136   1        rctWriteByte(RTCADDR_MONTH,temp);
+1137   1        temp = ((global.set.day/10)<<4) | (global.set.day%10);
+1138   1        rctWriteByte(RTCADDR_DAY,temp);
+1139   1        temp = ((global.set.hour/10)<<4) | (global.set.hour%10);
+1140   1        rctWriteByte(RTCADDR_HOUR,temp);
+1141   1        temp = ((global.set.minute/10)<<4) | (global.set.minute%10);
+1142   1        rctWriteByte(RTCADDR_MINUTE,temp);
+1143   1        temp = ((global.set.sec/10)<<4) | (global.set.sec%10);
+1144   1        rctWriteByte(RTCADDR_SEC,0);
+1145   1        rctWriteByte(RTCADDR_WP,RTC_WP_OPEN); //开启写保护
+1146   1        rtcGetTime();
+1147   1      }
+1148          
+1149          ///////////////////////////////////////////////IAP Flash//////////////////////////////////////////////////
+             -////
+1150          
+1151          #define PAGE_ERASE_AP 0x22
+1152          #define BYTE_PROGRAM_AP 0x21
+1153          
+1154          #define FLASHADDRHEARD 0x4550 //存储首地址
+1155          
+1156          //存储区--首地址用于存储首次开机标志
+1157          // volatile unsigned char code Data_Flash[128] _at_ 0x4550;
+1158          
+1159          unsigned char flash_readByte(unsigned int code* addr)
+1160          {
+1161   1        return (unsigned char)((*addr)>>8);
+1162   1      }
+1163          
+1164          void iapEnable(void)
+1165          {
+1166   1        clr_EA;
+1167   1        //使能IAP
+1168   1        TA = 0xAA; //CHPCON is TA protected
+1169   1        TA = 0x55;
+1170   1        CHPCON |= 0x01; //IAPEN = 1, enable IAP mode
+1171   1        TA = 0xAA; //IAPUEN is TA protected
+1172   1        TA = 0x55;
+1173   1        IAPUEN |= 0x01; //APUEN = 1, enable APROM update
+1174   1        set_EA;
+1175   1      }
+1176          
+1177          void iapErasePage(unsigned int addr)
+1178          {
+1179   1        //写字节
+1180   1        IAPCN = PAGE_ERASE_AP; // Program 201h with 55h
+1181   1        IAPAH = HIBYTE(addr);
+1182   1        IAPAL = LOBYTE(addr);
+1183   1        IAPFD = 0xff;
+1184   1      }
+1185          
+1186          void iapWriteByte(unsigned int addr,unsigned char dat)
+1187          {
+1188   1        //写字节
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 21  
+
+1189   1        IAPCN = BYTE_PROGRAM_AP; // Program 201h with 55h
+1190   1        IAPAH = HIBYTE(addr);
+1191   1        IAPAL = LOBYTE(addr);
+1192   1        IAPFD = dat;
+1193   1      }
+1194          
+1195          void iapTrigger(void)
+1196          {
+1197   1        clr_EA;
+1198   1        //执行IAP
+1199   1        TA = 0xAA;
+1200   1        TA = 0x55;
+1201   1        IAPTRG |= 0x01; //write ‘1’ to IAPGO to trigger IAP process
+1202   1        set_EA;
+1203   1      }
+1204          
+1205          void iapUnenable(void)
+1206          {
+1207   1        clr_EA;
+1208   1        //失能IAP
+1209   1        TA = 0xAA; //IAPUEN is TA protected
+1210   1        TA = 0x55;
+1211   1        IAPUEN &= ~0x01; //APUEN = 0, disable APROM update
+1212   1        TA = 0xAA; //CHPCON is TA protected
+1213   1        TA = 0x55;
+1214   1        CHPCON &= ~0x01; //IAPEN = 0, disable IAP mode
+1215   1        set_EA;
+1216   1      }
+1217          
+1218          unsigned char isFristStart(void)
+1219          {
+1220   1        if(flash_readByte(FLASHADDRHEARD) == 0xff)
+1221   1        {
+1222   2          iapEnable();
+1223   2          iapWriteByte(FLASHADDRHEARD,0x96);  //写已开机标志
+1224   2          iapTrigger();
+1225   2          iapUnenable();
+1226   2          return true;
+1227   2        }
+1228   1        else if(flash_readByte(FLASHADDRHEARD) == 0x96)
+1229   1        {
+1230   2          return false;
+1231   2        }
+1232   1        return false;
+1233   1      }
+1234          
+1235          void resetFlash(void)
+1236          {
+1237   1        iapEnable();
+1238   1        iapErasePage(FLASHADDRHEARD);
+1239   1        iapTrigger();
+1240   1        iapUnenable();
+1241   1      }
+1242          
+1243          void saveDataToFlash(void)
+1244          {
+1245   1        //先读出数据
+1246   1        
+1247   1        //再擦除
+1248   1        resetFlash();
+1249   1        iapEnable();
+1250   1        //写首次开机标志
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 22  
+
+1251   1        iapWriteByte(FLASHADDRHEARD,0x96);  //都能存预约数据了，那肯定开机了，那就要重新写�
+             -�志
+1252   1        iapTrigger();
+1253   1        //存预约数据
+1254   1        iapWriteByte(FLASHADDRHEARD+1,global.set.startLightHour);
+1255   1        iapTrigger();
+1256   1        iapWriteByte(FLASHADDRHEARD+2,global.set.startLightMinute);
+1257   1        iapTrigger();
+1258   1        iapWriteByte(FLASHADDRHEARD+3,global.set.keepLightHour);
+1259   1        iapTrigger();
+1260   1        iapWriteByte(FLASHADDRHEARD+4,global.set.keepLightMinute);
+1261   1        iapTrigger();
+1262   1        iapWriteByte(FLASHADDRHEARD+5,global.set.endLightHour);
+1263   1        iapTrigger();
+1264   1        iapWriteByte(FLASHADDRHEARD+6,global.set.endLightMinute);
+1265   1        iapTrigger();
+1266   1        iapWriteByte(FLASHADDRHEARD+7,global.set.startWaterHour);
+1267   1        iapTrigger();
+1268   1        iapWriteByte(FLASHADDRHEARD+8,global.set.startWaterMinute);
+1269   1        iapTrigger();
+1270   1        iapWriteByte(FLASHADDRHEARD+9,global.set.keepWaterHour);
+1271   1        iapTrigger();
+1272   1        iapWriteByte(FLASHADDRHEARD+10,global.set.keepWaterMinute);
+1273   1        iapTrigger();
+1274   1        iapWriteByte(FLASHADDRHEARD+11,global.set.endWaterHour);
+1275   1        iapTrigger();
+1276   1        iapWriteByte(FLASHADDRHEARD+12,global.set.endWaterMinute);
+1277   1        iapTrigger();
+1278   1        iapWriteByte(FLASHADDRHEARD+13,global.set.waterCycleDay);
+1279   1        iapTrigger();
+1280   1        iapUnenable();
+1281   1      }
+1282          
+1283          void readDataFromFlash(void)
+1284          {
+1285   1        global.set.startLightHour = flash_readByte(FLASHADDRHEARD+1);
+1286   1        global.set.startLightMinute = flash_readByte(FLASHADDRHEARD+2);
+1287   1        global.set.keepLightHour = flash_readByte(FLASHADDRHEARD+3);
+1288   1        global.set.keepLightMinute = flash_readByte(FLASHADDRHEARD+4);
+1289   1        global.set.endLightHour = flash_readByte(FLASHADDRHEARD+5);
+1290   1        global.set.endLightMinute = flash_readByte(FLASHADDRHEARD+6);
+1291   1        global.set.startWaterHour = flash_readByte(FLASHADDRHEARD+7);
+1292   1        global.set.startWaterMinute = flash_readByte(FLASHADDRHEARD+8);
+1293   1        global.set.keepWaterHour = flash_readByte(FLASHADDRHEARD+9);
+1294   1        global.set.keepWaterMinute = flash_readByte(FLASHADDRHEARD+10);
+1295   1        global.set.endWaterHour = flash_readByte(FLASHADDRHEARD+11);
+1296   1        global.set.endWaterMinute = flash_readByte(FLASHADDRHEARD+12);
+1297   1        global.set.waterCycleDay = flash_readByte(FLASHADDRHEARD+13);
+1298   1      }
+1299          
+1300          
+1301          ///////////////////////////////////////////////////////////////////////////////////被废弃的方法/////
+             -///////////////////////////////////////////////////////////
+1302          
+1303          
+1304          //
+1305          //计算倒计时，然后执行计时结束的一些操作，放在 runMain 中，每分钟进入一次
+1306          //
+1307          // void figureCountdown(void)
+1308          // {
+1309          //  //////////////////////////////////////照明/////////////////////////////////////
+1310          //  //距离下一次开始照明倒计时的计算
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 23  
+
+1311          //  if(global.set.startLightHour > global.time.hour)  //说明设定开始的小时还未到
+1312          //  {
+1313          //    if(global.set.startLightMinute >= global.time.minute) //说明设定开始的分钟还没到或正达
+             -到
+1314          //    {
+1315          //      global.device.nextStartLightCountDown = (global.set.startLightHour - global.time.hour)*60 + (global.
+             -set.startLightMinute - global.time.minute);
+1316          //    }
+1317          //    else if (global.set.startLightMinute < global.time.minute)  //说明设定开始的分钟已经超过�
+             -��
+1318          //    {
+1319          //      global.device.nextStartLightCountDown = (global.set.startLightHour - global.time.hour)*60 - (global.
+             -time.minute - global.set.startLightMinute);
+1320          //    }
+1321          //  }
+1322          //  else if(global.set.startLightHour == global.time.hour)
+1323          //  {
+1324          //    if(global.set.startLightMinute >= global.time.minute) //说明设定开始的分钟还没到或正达
+             -到
+1325          //    {
+1326          //      global.device.nextStartLightCountDown = global.set.startLightMinute - global.time.minute;
+1327          //    }
+1328          //    else if (global.set.startLightMinute < global.time.minute)  //说明设定开始的分钟已经超过�
+             -��
+1329          //    {
+1330          //      global.device.nextStartLightCountDown = 24*60 - (global.time.minute - global.set.startLightMinute);
+1331          //    }
+1332          //  }
+1333          //  else if(global.set.startLightHour < global.time.hour) //说明设定开始的小时已超过
+1334          //  {
+1335          //    if(global.set.startLightMinute >= global.time.minute) //说明设定开始的分钟还没到或正达
+             -到
+1336          //    {
+1337          //      global.device.nextStartLightCountDown = (24 - global.time.hour + global.set.startLightHour)*60 + (gl
+             -obal.set.startLightMinute - global.time.minute);
+1338          //    }
+1339          //    else if (global.set.startLightMinute < global.time.minute)  //说明设定开始的分钟已经超过�
+             -��
+1340          //    {
+1341          //      global.device.nextStartLightCountDown = (24 - global.time.hour + global.set.startLightHour)*60 - (gl
+             -obal.time.minute - global.set.startLightMinute);
+1342          //    }
+1343          //  }
+1344          //  //距离结束照明倒计时的计算
+1345          //  if(global.set.endLightHour > global.time.hour)  //说明设定结束的小时还未到或正达到
+1346          //  {
+1347          //    if(global.set.endLightMinute >= global.time.minute) //说明设定结束的分钟还没到或正达�
+             -�
+1348          //    {
+1349          //      global.device.endLightCountDown = (global.set.endLightHour - global.time.hour)*60 + (global.set.endL
+             -ightMinute - global.time.minute);
+1350          //    }
+1351          //    else if (global.set.endLightMinute < global.time.minute)  //说明设定结束的分钟已经超过了
+1352          //    {
+1353          //      global.device.endLightCountDown = (global.set.endLightHour - global.time.hour)*60 - (global.time.min
+             -ute - global.set.endLightMinute);
+1354          //    }
+1355          //  }
+1356          //  else if(global.set.endLightHour == global.time.hour)
+1357          //  {
+1358          //    if(global.set.endLightMinute >= global.time.minute) //说明设定结束的分钟还没到或正达�
+             -�
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 24  
+
+1359          //    {
+1360          //      global.device.endLightCountDown = global.set.endLightMinute - global.time.minute;
+1361          //    }
+1362          //    else if (global.set.endLightMinute < global.time.minute)  //说明设定结束的分钟已经超过了
+1363          //    {
+1364          //      global.device.endLightCountDown = 24*60 - (global.time.minute - global.set.endLightMinute);
+1365          //    }
+1366          //  }
+1367          //  else if(global.set.endLightHour < global.time.hour) //说明设定结束的小时已超过
+1368          //  {
+1369          //    if(global.set.endLightMinute >= global.time.minute) //说明设定结束的分钟还没到或正达�
+             -�
+1370          //    {
+1371          //      global.device.endLightCountDown = (24 - global.time.hour + global.set.endLightHour)*60 + (global.set
+             -.endLightMinute - global.time.minute);
+1372          //    }
+1373          //    else if (global.set.endLightMinute < global.time.minute)  //说明设定结束的分钟已经超过了
+1374          //    {
+1375          //      global.device.endLightCountDown = (24 - global.time.hour + global.set.endLightHour)*60 - (global.tim
+             -e.minute - global.set.endLightMinute);
+1376          //    }
+1377          //  }
+1378          
+1379          //  //////////////////////////////////////浇水/////////////////////////////////////
+1380          
+1381          //  if(global.time.hour == 0 && global.time.minute == 0)  //零点，做浇水周期计算
+1382          //  {
+1383          //    //每天零点减一天，减到1则当天浇水，浇水结束后重置。
+1384          //    if(global.device.nextWaterDayCountDown > 1) --global.device.nextWaterDayCountDown;
+1385          
+1386          //    if(global.device.nextWaterDayCountDown == 0)  //如果为0，则重置
+1387          //    {
+1388          //      global.device.nextWaterDayCountDown = global.set.waterCycleDay;
+1389          //    }
+1390          //  }
+1391          
+1392          //  //距离下一次开始浇水倒计时的计算
+1393          //  if(global.set.startWaterHour > global.time.hour)  //说明设定开始的小时还未到或正达到
+1394          //  {
+1395          //    if(global.set.startWaterMinute > global.time.minute)  //说明设定开始的分钟还没到或正达�
+             -��
+1396          //    {
+1397          //      global.device.nextStartWaterCountDown = (global.set.startWaterHour - global.time.hour)*60 + (global.
+             -set.startWaterMinute - global.time.minute);
+1398          //      global.device.nextStartWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60; //再加上�
+             -��期天数的偏移
+1399          //    }
+1400          //    else if (global.set.startWaterMinute < global.time.minute)  //说明设定开始的分钟已经超过�
+             -��
+1401          //    {
+1402          //      global.device.nextStartWaterCountDown = (global.set.startWaterHour - global.time.hour)*60 - (global.
+             -time.minute - global.set.startWaterMinute);
+1403          //      global.device.nextStartWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1404          //    }
+1405          //  }
+1406          //  else if(global.set.startWaterHour == global.time.hour)
+1407          //  {
+1408          //    if(global.set.startWaterMinute >= global.time.minute) //说明设定开始的分钟还没到或正达
+             -到
+1409          //    {
+1410          //      global.device.nextStartWaterCountDown = global.set.startWaterMinute - global.time.minute;
+1411          //      global.device.nextStartWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60; //再加上�
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 25  
+
+             -��期天数的偏移
+1412          //    }
+1413          //    else if (global.set.startWaterMinute < global.time.minute)  //说明设定开始的分钟已经超过�
+             -��
+1414          //    {
+1415          //      global.device.nextStartWaterCountDown = 24*60 - (global.time.minute - global.set.startWaterMinute);
+1416          //      global.device.nextStartWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1417          //    }
+1418          //  }
+1419          //  else if(global.set.startWaterHour < global.time.hour) //说明设定开始的小时已超过
+1420          //  {
+1421          //    if(global.set.startWaterMinute >= global.time.minute) //说明设定开始的分钟还没到或正达
+             -到
+1422          //    {
+1423          //      global.device.nextStartWaterCountDown = (24 - global.time.hour + global.set.startWaterHour)*60 + (gl
+             -obal.set.startWaterMinute - global.time.minute);
+1424          //      global.device.nextStartWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1425          //    }
+1426          //    else if (global.set.startWaterMinute < global.time.minute)  //说明设定开始的分钟已经超过�
+             -��
+1427          //    {
+1428          //      global.device.nextStartWaterCountDown = (24 - global.time.hour + global.set.startWaterHour)*60 - (gl
+             -obal.time.minute - global.set.startWaterMinute);
+1429          //      global.device.nextStartWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1430          //    }
+1431          //  }
+1432          //  //距离结束浇水倒计时的计算
+1433          //  if(global.set.endWaterHour > global.time.hour)  //说明设定结束的小时还未到或正达到
+1434          //  {
+1435          //    if(global.set.endWaterMinute >= global.time.minute) //说明设定结束的分钟还没到或正达�
+             -�
+1436          //    {
+1437          //      global.device.endWaterCountDown = (global.set.endWaterHour - global.time.hour)*60 + (global.set.endW
+             -aterMinute - global.time.minute);
+1438          //      global.device.endWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1439          //    }
+1440          //    else if (global.set.endWaterMinute < global.time.minute)  //说明设定结束的分钟已经超过了
+1441          //    {
+1442          //      global.device.endWaterCountDown = (global.set.endWaterHour - global.time.hour)*60 - (global.time.min
+             -ute - global.set.endWaterMinute);
+1443          //      global.device.endWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1444          //    }
+1445          //  }
+1446          //  else if(global.set.endWaterHour == global.time.hour)
+1447          //  {
+1448          //    if(global.set.endWaterMinute >= global.time.minute) //说明设定结束的分钟还没到或正达�
+             -�
+1449          //    {
+1450          //      global.device.endWaterCountDown = global.set.endWaterMinute - global.time.minute;
+1451          //      global.device.endWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1452          //    }
+1453          //    else if (global.set.endWaterMinute < global.time.minute)  //说明设定结束的分钟已经超过了
+1454          //    {
+1455          //      global.device.endWaterCountDown = 24*60 - (global.time.minute - global.set.endWaterMinute);
+1456          //      global.device.endWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1457          //    }
+1458          //  }
+1459          //  else if(global.set.endWaterHour < global.time.hour) //说明设定结束的小时已超过
+1460          //  {
+1461          //    if(global.set.endWaterMinute >= global.time.minute) //说明设定结束的分钟还没到或正达�
+             -�
+1462          //    {
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 26  
+
+1463          //      global.device.endWaterCountDown = (24 - global.time.hour + global.set.endWaterHour)*60 + (global.set
+             -.endWaterMinute - global.time.minute);
+1464          //      global.device.endWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1465          //    }
+1466          //    else if (global.set.endWaterMinute < global.time.minute)  //说明设定结束的分钟已经超过了
+1467          //    {
+1468          //      global.device.endWaterCountDown = (24 - global.time.hour + global.set.endWaterHour)*60 - (global.tim
+             -e.minute - global.set.endWaterMinute);
+1469          //      global.device.endWaterCountDown += (global.device.nextWaterDayCountDown-1)*24*60;
+1470          //    }
+1471          //  }
+1472          
+1473          //  /////////////////////////////////////////////////////////////根据倒计时判断是否执行对应�
+             -�作//////////////////////////////////////////////////////////////
+1474          //  if(global.device.nextStartWaterCountDown == 0)  //结束照明,这里的不管在线离线，只是为�
+             -��重置浇水周期的计时
+1475          //  {
+1476          //    global.device.nextWaterDayCountDown = global.set.waterCycleDay;
+1477          //  }
+1478          //  /////////////前提是处于离线状态，在线状态的控制有wifi模块负责///////////////
+1479          //  if(global.device.wifi == offline)
+1480          //  {
+1481          //    if(global.device.nextStartLightCountDown == 0)  //计时到0，说明可以开始照明了
+1482          //    {
+1483          //      global.device.light = true;
+1484          //      LIGHT_OPEN;
+1485          //    }
+1486          //    if(global.device.endLightCountDown == 0)  //结束照明
+1487          //    {
+1488          //      global.device.light = false;
+1489          //      LIGHT_CLOSE;
+1490          //    }
+1491          //    if(global.device.nextStartWaterCountDown == 0)  //计时到0，说明可以开始浇水了
+1492          //    {
+1493          //      global.device.water = true;
+1494          //      WATER_OPEN;
+1495          //    }
+1496          //    if(global.device.endWaterCountDown == 0)  //结束照明
+1497          //    {
+1498          //      global.device.water = false;
+1499          //      WATER_CLOSE;
+1500          //    }
+1501          //  }
+1502          // }
+1503          
+1504          // //通过开始和持续时间，计算结束时间
+1505          // void figureEndTime(void)
+1506          // {
+1507          //  //////首先计算分钟//////////
+1508          //  if(global.set.startLightMinute + global.set.keepLightMinute >= 60)  //不在同一小时了，需要让
+             -小时加一
+1509          //  {
+1510          //    global.set.endLightMinute = global.set.startLightMinute + global.set.keepLightMinute - 60;
+1511          //    if((global.set.startLightHour + global.set.keepLightHour + 1) >= 24)  //开始结束不在同一天
+1512          //    {
+1513          //      global.set.endLightHour = global.set.startLightHour + global.set.keepLightHour + 1 - 24;
+1514          //    }
+1515          //    else  //在同一天
+1516          //    {
+1517          //      global.set.endLightHour = global.set.startLightHour + global.set.keepLightHour + 1;
+1518          //    }
+1519              
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 27  
+
+1520          //  }
+1521          //  else  //在同一小时
+1522          //  {
+1523          //    global.set.endLightMinute = global.set.startLightMinute + global.set.keepLightMinute;
+1524          //    if(global.set.startLightHour + global.set.keepLightHour >= 24)  //开始结束不在同一天
+1525          //    {
+1526          //      global.set.endLightHour = global.set.startLightHour + global.set.keepLightHour - 24;
+1527          //    }
+1528          //    else  //在同一天
+1529          //    {
+1530          //      global.set.endLightHour = global.set.startLightHour + global.set.keepLightHour;
+1531          //    }
+1532          //  }
+1533          
+1534            
+1535          //  if(global.set.startWaterMinute + global.set.keepWaterMinute >= 60)  //不在同一小时了，需要让
+             -小时加一
+1536          //  {
+1537          //    global.set.endWaterMinute = global.set.startWaterMinute + global.set.keepWaterMinute - 60;
+1538          //    if((global.set.startWaterHour + global.set.keepWaterHour + 1) >= 24)  //开始结束不在同一天
+1539          //    {
+1540          //      global.set.endWaterHour = global.set.startWaterHour + global.set.keepWaterHour + 1 - 24;
+1541          //    }
+1542          //    else  //在同一天
+1543          //    {
+1544          //      global.set.endWaterHour = global.set.startWaterHour + global.set.keepWaterHour + 1;
+1545          //    }
+1546              
+1547          //  }
+1548          //  else  //在同一小时
+1549          //  {
+1550          //    global.set.endWaterMinute = global.set.startWaterMinute + global.set.keepWaterMinute;
+1551          //    if(global.set.startWaterHour + global.set.keepWaterHour >= 24)  //开始结束不在同一天
+1552          //    {
+1553          //      global.set.endWaterHour = global.set.startWaterHour + global.set.keepWaterHour - 24;
+1554          //    }
+1555          //    else  //在同一天
+1556          //    {
+1557          //      global.set.endWaterHour = global.set.startWaterHour + global.set.keepWaterHour;
+1558          //    }
+1559          //  }
+1560          // }
+1561          
+1562          
+1563          ///////////////////////////////////////////////串口9功能//////////////////////////////////////////////
+             -////////
+1564          
+1565          // void uart9_fun(unsigned char* buff)
+1566          // {
+1567          //  switch(buff[3]) //下标2和3为消息类型，但目前2为0x00所以判断3即可
+1568          //  {
+1569          //    case 0x01:  //设备状态获取请求  //顶板索要设备状态数据，并给出当前温度
+1570          //    {
+1571          //      global.device.temperature = buff[4]<<8 | buff[5]; //拿到温度
+1572          //      global.device.getStateFlag = true;  //标记获取状态标志，将要发送设备状态给顶板
+1573          //    }break;
+1574          //    case 0x03:  //设置参数获取请求
+1575          //    {
+1576          //      global.set.getDataFlag = true;
+1577          //    }break;
+1578          //    case 0x05:  //设备状态设置请求，按下照明或浇水或连wifi
+1579          //    {
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 28  
+
+1580          //      global.work.keyDo = buff[4];
+1581          //      global.work.serventSetDevieSateFlag = true; //判断键值，并且发送给模块决断
+1582          //    }break;
+1583          //    case 0x06:  //设置参数设置请求
+1584          //    {
+1585          //      global.set.hour = buff[4];
+1586          //      global.set.minute = buff[5];
+1587          //      global.set.startLightHour = buff[6];
+1588          //      global.set.startLightMinute = buff[7];
+1589          //      global.set.keepLightHour = buff[8];
+1590          //      global.set.keepLightMinute = buff[9];
+1591          //      global.set.startWaterHour = buff[10];
+1592          //      global.set.startWaterMinute = buff[11];
+1593          //      global.set.keepWaterHour = buff[12];
+1594          //      global.set.keepWaterMinute = buff[13];
+1595          //      global.set.waterCycleDay = buff[14];
+1596          
+1597          //      global.set.setDatFlag = true;
+1598          //    }break;
+1599          //  }
+1600          // }
+1601          
+1602          // ////发送一个字节
+1603          // void uart9SendByte(unsigned char dat)
+1604          // {
+1605          //  // while(runData.iouart.recEnable); //当接收使能时，不发送数据，等待接收完毕再发�
+             -��  //测试后发现并没有软用
+1606          //  global.iouart.sendData = dat;
+1607          //  global.iouart.sendCount = 0;
+1608          //  global.iouart.sendComplete = false;
+1609          //  global.iouart.sendEnable = true;
+1610          //  while(!global.iouart.sendComplete); //等待数据发送完成
+1611          // }
+1612          
+1613          // ////发送一串字节
+1614          // void uart9Send(unsigned char* buff,unsigned char len)
+1615          // {
+1616          //  while(len)
+1617          //  {
+1618          //    uart9SendByte(*buff);
+1619          //    --len; 
+1620          //    if(len != 0) ++buff;
+1621          //  }
+1622          // }
+1623          
+1624          // #define UART9_RD P03
+1625          // #define UART9_TD_H set_P04
+1626          // #define UART9_TD_L clr_P04
+1627          
+1628          // void initUart9(void)
+1629          // {
+1630          //  P04_Quasi_Mode; //在电路中的标号为Rx,但是电路不改的话需要软件设置为Tx
+1631          //  P03_Quasi_Mode; //在电路中的标号为Tx,但是电路不改的话需要软件设置为Rx
+1632          
+1633          //  TMOD |= 0x02; //模式2,8位自动重装载
+1634          //  clr_T0M;  //12分频
+1635          //  TH0 = 256 - 139;  //9600
+1636          //  set_ET0;  //使能定时器0中断
+1637          //  set_EA; //使能总中断
+1638          //  set_TR0;  //开启定时器0
+1639          // }
+1640          
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 29  
+
+1641          // //1起始位--8数据位--1停止位
+1642          // void uart9_isr(void)
+1643          // {
+1644          //  unsigned char i,sum = 0;
+1645          
+1646          //  ////////接收部分////////
+1647          //  if(global.iouart.recEnable == false)
+1648          //  {
+1649          //    if(!UART9_RD) //RD脚被拉低--即接收到起始位--起始位为0
+1650          //    {
+1651          //      global.iouart.recEnable = true;
+1652          //      global.iouart.recCount = 0;
+1653          //      global.iouart.recData = 0x00;
+1654          //    }
+1655          //  }
+1656          //  else
+1657          //  {
+1658          //    //接收数据
+1659          //    if(global.iouart.recCount <= 7)
+1660          //    {
+1661          //      global.iouart.recTimeOutCount = 1;  //开启超时计时，为1则计时，如果超时，则放弃�
+             -�前数据位，收到数据位则刷新
+1662          //      ++global.iouart.recCount;
+1663          //      global.iouart.recData >>= 1;
+1664          //      if(UART9_RD)
+1665          //      {
+1666          //        global.iouart.recData |= 0x80;  //低位在先
+1667          //      }
+1668          //    }
+1669          //    else if(global.iouart.recCount == 8)
+1670          //    {
+1671          //      if(UART9_RD)  //RD脚被拉高--即接收到停止位--停止位为1
+1672          //      {
+1673          //        global.iouart.recComplete = true;
+1674          //      }
+1675          //      global.iouart.recTimeOutCount = 0;  //关闭超时计时，为0则不计时
+1676          //      global.iouart.recEnable = false;
+1677          //    }
+1678          //  }
+1679          
+1680          //  ////数据处理
+1681          //  if(global.iouart.recComplete == true)
+1682          //  {
+1683          //    global.iouart.recComplete = false;
+1684              
+1685          //    //判断接收的数据是否符合通信格式
+1686          //    if(global.iouart.nowIndex == 0 && global.iouart.recData == 0x96)  //头
+1687          //    {
+1688          //      global.iouart.recTimeOutCount = 1;  //开启超时计时，为1则计时，如果超时，则放弃�
+             -�前数据包，收到数据包则刷新
+1689          //      global.iouart.recBuff[global.iouart.nowIndex] = global.iouart.recData;
+1690          //      ++global.iouart.nowIndex;
+1691          //    }
+1692          //    else if(global.iouart.nowIndex == 1)  //数据长度
+1693          //    {
+1694          //      global.iouart.recTimeOutCount = 1;  //重置超时计时，如果为0则不计时，如果超时，�
+             -�放弃当前数据包，收到数据包则刷新
+1695          //      global.iouart.recBuff[global.iouart.nowIndex] = global.iouart.recData;  //长度：从头到校验
+1696          //      ++global.iouart.nowIndex;
+1697          //    }
+1698          //    else if(global.iouart.nowIndex >= 2 && global.iouart.nowIndex <= global.iouart.recBuff[1]-2)  //减去
+             -了校验字节，因为下标比实际长度小1，所以-2
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 30  
+
+1699          //    {
+1700          //      global.iouart.recTimeOutCount = 1;  //重置超时计时，如果为0则不计时，如果超时，�
+             -�放弃当前数据包，收到数据包则刷新
+1701          //      global.iouart.recBuff[global.iouart.nowIndex] = global.iouart.recData;  //数据
+1702          //      ++global.iouart.nowIndex;
+1703          //    }
+1704          //    else if(global.iouart.nowIndex == global.iouart.recBuff[1]-1) //校验
+1705          //    {
+1706          //      //之后更改模式，将耗时操作都移走
+1707          
+1708          //      global.iouart.recTimeOutCount = 0;  //关闭超时计时，为0则不计时
+1709          //      for(i = 0;i <= global.iouart.recBuff[1] - 2;i++)  //计算校验和
+1710          //      {
+1711          //        sum += global.iouart.recBuff[i];
+1712          //      }
+1713          //      if(sum == global.iouart.recData)  //校验通过
+1714          //      {
+1715          //        global.iouart.recBuff[global.iouart.nowIndex] = global.iouart.recData;  //校验
+1716          //        uart9_fun(global.iouart.recBuff); //功能判断
+1717          //      }
+1718          //      global.iouart.nowIndex = 0;
+1719          //    }
+1720          //  }
+1721          
+1722          //  ////////发送部分////////
+1723          //  if(global.iouart.sendEnable)
+1724          //  {
+1725          //    if (global.iouart.sendCount == 0)
+1726          //    {
+1727          //      UART9_TD_L; //产生一个起始位--0
+1728          //      ++global.iouart.sendCount;
+1729          //    }
+1730          //    else if(global.iouart.sendCount >= 1 && global.iouart.sendCount <= 8)
+1731          //    {
+1732          //      if( (global.iouart.sendData >> (global.iouart.sendCount-1)) & 0x01) //先发低位
+1733          //      {
+1734          //        UART9_TD_H;
+1735          //      }
+1736          //      else
+1737          //      {
+1738          //        UART9_TD_L;
+1739          //      }
+1740          //      ++global.iouart.sendCount;
+1741          //    }
+1742          //    else if (global.iouart.sendCount == 9)
+1743          //    {
+1744          //      UART9_TD_H; //产生一个停止位--1
+1745          //      global.iouart.sendCount = 0;
+1746          //      global.iouart.sendEnable = false;
+1747          //      global.iouart.sendComplete = true;
+1748          //    }
+1749          //  }
+1750          // }
+1751          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   4585    ----
+   CONSTANT SIZE    =     32    ----
+   XDATA SIZE       =      1      59
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+C51 COMPILER V9.60.0.0   FUNC                                                              11/07/2019 15:42:57 PAGE 31  
+
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

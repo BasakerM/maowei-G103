@@ -1,0 +1,9 @@
+".\Objects\STARTUP.obj",
+".\Objects\Common.obj",
+".\Objects\Delay.obj",
+".\Objects\main.obj",
+".\Objects\func.obj",
+".\Objects\global.obj",
+".\Objects\io.obj" 
+TO ".\Objects\¶¥°å" 
+PRINT(".\Listings\¶¥°å.m51") RAMSIZE(256) 
